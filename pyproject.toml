@@ -1,0 +1,20 @@
+[tool.poetry]
+name = "pdf2epub"
+version = "0.1.0"
+description = ""
+authors = ["ShenSheiBot <shensheibot@protonmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pyyaml = "^6.0.2"
+pypdf = "^5.4.0"
+google-genai = "^1.8.0"
+pypdf2 = "^3.0.1"
+pymupdf = "^1.25.4"
+pillow = "^11.1.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

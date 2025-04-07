@@ -1,0 +1,540 @@
+import os
+import shutil
+import yaml
+import zipfile
+import re
+import hashlib
+import json
+from pathlib import Path
+from google import genai
+from google.genai.types import (
+    GenerateContentConfig,
+    HarmBlockThreshold,
+    HarmCategory,
+    SafetySetting,
+)
+import xml.etree.ElementTree as ET
+import argparse
+
+
+def load_config():
+    """Load configuration from config.yaml file."""
+    with open("config.yaml", "r", encoding="utf-8") as file:
+        config = yaml.safe_load(file)
+    return config
+
+
+def setup_genai_api(api_key):
+    """Setup Google Generative AI API with the provided key."""
+    return genai.Client(api_key=api_key)
+
+
+def ensure_directory(directory_path):
+    """Ensure a directory exists, create it if it doesn't."""
+    Path(directory_path).mkdir(parents=True, exist_ok=True)
+
+
+def clean_html_response(html_content):
+    """Clean the HTML response from Gemini."""
+    html_content = re.sub(r"```html\s*", "", html_content)
+    html_content = re.sub(r"```\s*$", "", html_content)
+    html_content = re.sub(r"```[a-zA-Z]*\s*", "", html_content)
+    html_match = re.search(
+        r"(?:<\!DOCTYPE.*?>|<html.*?>).*?<\/html>", html_content, re.DOTALL
+    )
+    if html_match:
+        html_content = html_match.group(0)
+    return html_content.strip()
+
+
+def extract_epub(epub_path, extract_dir):
+    """Extract EPUB contents to a directory."""
+    with zipfile.ZipFile(epub_path, "r") as zip_ref:
+        zip_ref.extractall(extract_dir)
+    print(f"Extracted EPUB to {extract_dir}")
+
+
+def parse_toc_ncx(ncx_path):
+    """Parse the toc.ncx file to get chapter structure."""
+    tree = ET.parse(ncx_path)
+    root = tree.getroot()
+
+    # Find namespace
+    ns = {"ncx": root.tag.split("}")[0].strip("{")}
+
+    chapters = []
+
+    # Find all navPoint elements (chapters)
+    for nav_point in root.findall(".//ncx:navPoint", ns):
+        # Get chapter title
+        title_elem = nav_point.find(".//ncx:text", ns)
+        title = title_elem.text if title_elem is not None else "Unknown Title"
+
+        # Get chapter source file
+        content_elem = nav_point.find("ncx:content", ns)
+        if content_elem is not None:
+            src = content_elem.get("src")
+            chapters.append({"title": title, "src": src})
+
+    return chapters
+
+
+def translate_html_content(
+    html_content,
+    chapter_title,
+    book_title,
+    source_language,
+    target_language,
+    client,
+    previous_content=None,
+):
+    """Translate HTML content using Gemini API."""
+    context = ""
+    if previous_content:
+        context = f"Previous chapter content (for context only, do not translate this again):\n{previous_content[:2000]}\n\n"
+
+    prompt = f"""
+    Translate the following HTML content from {source_language} to {target_language}.
+    
+    Book title: {book_title}
+    Chapter title: {chapter_title}
+    
+    IMPORTANT INSTRUCTIONS:
+    1. Preserve all HTML tags, attributes, and structure exactly as they are.
+    2. Only translate the text content inside tags, not the tags themselves.
+    3. Preserve all class names, IDs, and other attributes.
+    4. Keep all image references and links intact.
+    5. Maintain the same formatting and structure.
+    6. Translate all visible text, including image alt attributes, but don't change any code.
+    7. Make sure the translation is accurate and natural-sounding in {target_language}.
+    8. For names of people, places, or titles that have standard translations in {target_language}, 
+       use those standard translations.
+    
+    {context}HTML content to translate:
+    
+    {html_content}
+    
+    Return only the translated HTML without any other commentary.
+    """
+
+    # Generate content
+    response = client.models.generate_content(
+        model="gemini-2.5-pro-exp-03-25",
+        contents=prompt,
+        config=GenerateContentConfig(
+            temperature=0.2,
+            safety_settings=[
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                    threshold=HarmBlockThreshold.BLOCK_NONE,
+                ),
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                    threshold=HarmBlockThreshold.BLOCK_NONE,
+                ),
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                    threshold=HarmBlockThreshold.BLOCK_NONE,
+                ),
+                SafetySetting(
+                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                    threshold=HarmBlockThreshold.BLOCK_NONE,
+                ),
+            ],
+        ),
+    )
+
+    # Clean and return the translated HTML
+    translated_html = clean_html_response(response.text)
+    return translated_html
+
+
+def translate_book_title(book_title, source_language, target_language, client):
+    """Translate the book title using Gemini API."""
+    prompt = f"""
+    Translate the following book title from {source_language} to {target_language}.
+    Only return the translated title without any explanations or additional text.
+    
+    Book title: {book_title}
+    """
+
+    response = client.models.generate_content(
+        model="gemini-2.5-pro-exp-03-25",
+        contents=prompt,
+        config=GenerateContentConfig(
+            temperature=0.1,
+        ),
+    )
+
+    return response.text.strip()
+
+
+def translate_toc_entries(chapters, source_language, target_language, client):
+    """Translate the table of contents entries."""
+    translated_chapters = []
+
+    # Batch process chapters to reduce API calls
+    batch_size = 10
+    for i in range(0, len(chapters), batch_size):
+        batch = chapters[i : i + batch_size]
+
+        titles = [chapter["title"] for chapter in batch]
+        titles_str = "\n".join([f"{j+1}. {title}" for j, title in enumerate(titles)])
+
+        prompt = f"""
+        Translate the following chapter titles from {source_language} to {target_language}.
+        Return only the translated titles, one per line, numbered as in the original list.
+        
+        {titles_str}
+        """
+
+        response = client.models.generate_content(
+            model="gemini-2.5-pro-exp-03-25",
+            contents=prompt,
+            config=GenerateContentConfig(
+                temperature=0.1,
+            ),
+        )
+
+        translated_titles = response.text.strip().split("\n")
+        cleaned_titles = [
+            re.sub(r"^\d+\.\s*", "", title).strip() for title in translated_titles
+        ]
+
+        for j, chapter in enumerate(batch):
+            if j < len(cleaned_titles):
+                translated_chapters.append(
+                    {
+                        "title": cleaned_titles[j],
+                        "src": chapter["src"],
+                        "original_title": chapter["title"],
+                    }
+                )
+            else:
+                # Fallback if translation failed
+                translated_chapters.append(
+                    {
+                        "title": chapter["title"],
+                        "src": chapter["src"],
+                        "original_title": chapter["title"],
+                    }
+                )
+
+    return translated_chapters
+
+
+def update_toc_ncx(toc_path, translated_chapters):
+    """Update the toc.ncx file with translated chapter titles."""
+    tree = ET.parse(toc_path)
+    root = tree.getroot()
+
+    # Find namespace
+    ns = {"ncx": root.tag.split("}")[0].strip("{")}
+
+    # Update each navPoint with the translated title
+    for nav_point in root.findall(".//ncx:navPoint", ns):
+        # Get content element to find src
+        content_elem = nav_point.find("ncx:content", ns)
+        if content_elem is not None:
+            src = content_elem.get("src")
+
+            # Find matching chapter
+            for chapter in translated_chapters:
+                if Path(chapter["src"]).name == Path(src).name:
+                    # Update the title
+                    title_elem = nav_point.find(".//ncx:text", ns)
+                    if title_elem is not None:
+                        title_elem.text = chapter["title"]
+                    break
+
+    # Write updated toc.ncx
+    tree.write(toc_path, encoding="utf-8", xml_declaration=True)
+
+
+def calculate_file_hash(file_path):
+    """Calculate MD5 hash of a file for comparison."""
+    hasher = hashlib.md5()
+    with open(file_path, "rb") as file:
+        buf = file.read()
+        hasher.update(buf)
+    return hasher.hexdigest()
+
+
+def save_translation_progress(progress_file, progress_data):
+    """Save translation progress to a JSON file."""
+    with open(progress_file, "w", encoding="utf-8") as f:
+        json.dump(progress_data, f, indent=2)
+
+
+def load_translation_progress(progress_file):
+    """Load translation progress from a JSON file."""
+    if Path(progress_file).exists():
+        with open(progress_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {
+        "book_title_translated": False,
+        "toc_translated": False,
+        "content_opf_updated": False,
+        "translated_chapters": [],
+        "translated_book_title": "",
+        "last_processed_chapter_index": -1,
+    }
+
+
+def translate_epub(input_epub_path, source_language, target_language, config):
+    """Main function to translate an EPUB file."""
+    # Setup paths and directories
+    original_book_title = Path(input_epub_path).stem
+
+    # Setup API
+    api_key = config.get("google_api_key")
+    if not api_key:
+        raise ValueError("Google API key not found in config.yaml")
+    client = setup_genai_api(api_key)
+
+    # Setup directories
+    output_dir = Path("output") / Path(original_book_title)
+    epub_extract_dir = output_dir / "extract"
+    epub_translated_dir = output_dir / "translated"
+    progress_file = output_dir / "translation_progress.json"
+
+    ensure_directory(output_dir)
+
+    # Check if we're resuming a previous translation
+    resuming = epub_translated_dir.exists()
+    progress = None
+
+    if resuming:
+        print("Found existing translation. Attempting to resume...")
+        progress = load_translation_progress(progress_file)
+    else:
+        # Start fresh
+        ensure_directory(epub_extract_dir)
+        ensure_directory(epub_translated_dir)
+
+        # Extract the EPUB
+        extract_epub(input_epub_path, epub_extract_dir)
+
+        # Initialize progress tracking
+        progress = {
+            "book_title_translated": False,
+            "toc_translated": False,
+            "content_opf_updated": False,
+            "translated_chapters": [],
+            "translated_book_title": "",
+            "last_processed_chapter_index": -1,
+        }
+
+    # Find toc.ncx
+    toc_ncx_path = None
+    for path in Path(epub_extract_dir).rglob("toc.ncx"):
+        toc_ncx_path = path
+        break
+
+    if not toc_ncx_path:
+        raise FileNotFoundError("toc.ncx not found in the EPUB file.")
+
+    # Parse toc.ncx to get chapter structure
+    chapters = parse_toc_ncx(toc_ncx_path)
+
+    # Translate the book title if not already done
+    if not progress["book_title_translated"]:
+        translated_book_title = translate_book_title(
+            original_book_title, source_language, target_language, client
+        )
+        print(f"Original title: {original_book_title}")
+        print(f"Translated title: {translated_book_title}")
+        progress["translated_book_title"] = translated_book_title
+        progress["book_title_translated"] = True
+        save_translation_progress(progress_file, progress)
+    else:
+        translated_book_title = progress["translated_book_title"]
+        print(f"Using existing translated title: {translated_book_title}")
+
+    # Translate chapter titles if not already done
+    if not progress["toc_translated"]:
+        translated_chapters = translate_toc_entries(
+            chapters, source_language, target_language, client
+        )
+        progress["translated_chapters"] = [
+            {
+                "title": chapter["title"],
+                "src": chapter["src"],
+                "original_title": chapter["original_title"],
+                "translated": False,
+            }
+            for chapter in translated_chapters
+        ]
+        progress["toc_translated"] = True
+        save_translation_progress(progress_file, progress)
+    else:
+        # Use existing translated chapter titles
+        print("Using existing translated chapter titles")
+        translated_chapters = progress["translated_chapters"]
+
+    # Copy all files to the translated directory first (if not already done)
+    if not resuming:
+        shutil.copytree(epub_extract_dir, epub_translated_dir, dirs_exist_ok=True)
+
+    # Update toc.ncx with translated titles (if not already done)
+    translated_toc_path = Path(epub_translated_dir) / toc_ncx_path.relative_to(
+        epub_extract_dir
+    )
+    if not resuming or not progress["toc_translated"]:
+        update_toc_ncx(translated_toc_path, translated_chapters)
+
+    # Update content.opf to update book title (if not already done)
+    if not progress["content_opf_updated"]:
+        content_opf_paths = list(Path(epub_translated_dir).rglob("content.opf"))
+        if content_opf_paths:
+            content_opf_path = content_opf_paths[0]
+            with open(content_opf_path, "r", encoding="utf-8") as f:
+                content_opf_content = f.read()
+
+            # Update title in content.opf
+            content_opf_content = re.sub(
+                r"<dc:title>.*?</dc:title>",
+                f"<dc:title>{translated_book_title}</dc:title>",
+                content_opf_content,
+            )
+
+            with open(content_opf_path, "w", encoding="utf-8") as f:
+                f.write(content_opf_content)
+
+            progress["content_opf_updated"] = True
+            save_translation_progress(progress_file, progress)
+
+    # Translate chapters that haven't been translated yet
+    previous_content = None
+    start_index = progress["last_processed_chapter_index"] + 1
+
+    for i, chapter in enumerate(translated_chapters[start_index:], start=start_index):
+        if progress["translated_chapters"][i].get("translated", False):
+            print(
+                f"Skipping already translated chapter {i+1}/{len(translated_chapters)}: {chapter['title']}"
+            )
+            continue
+
+        chapter_path = None
+        chapter_src = chapter["src"]
+
+        # Find the full path to the chapter file
+        for path in Path(epub_translated_dir).rglob(Path(chapter_src).name):
+            chapter_path = path
+            break
+
+        if chapter_path:
+            print(
+                f"Translating chapter {i+1}/{len(translated_chapters)}: {chapter['original_title']} → {chapter['title']}"
+            )
+
+            # Read the HTML content
+            with open(chapter_path, "r", encoding="utf-8") as f:
+                html_content = f.read()
+
+            # Translate the HTML content
+            translated_html = translate_html_content(
+                html_content,
+                chapter["title"],
+                translated_book_title,
+                source_language,
+                target_language,
+                client,
+                previous_content,
+            )
+
+            # Save the translated HTML
+            with open(chapter_path, "w", encoding="utf-8") as f:
+                f.write(translated_html)
+
+            # Store for context in next translation (use a summary or first part to save tokens)
+            if len(translated_html) > 5000:
+                previous_content = translated_html[:5000]
+            else:
+                previous_content = translated_html
+
+            # Update progress
+            progress["translated_chapters"][i]["translated"] = True
+            progress["last_processed_chapter_index"] = i
+            save_translation_progress(progress_file, progress)
+
+    # Create the final EPUB file
+    output_epub_path = output_dir / f"{translated_book_title}.epub"
+
+    # Create a temporary zip file
+    temp_zip = output_dir / "temp.zip"
+
+    # Create the EPUB zip file
+    with zipfile.ZipFile(temp_zip, "w", zipfile.ZIP_DEFLATED) as zipf:
+        # First add the mimetype file (must be uncompressed)
+        mimetype_path = Path(epub_translated_dir) / "mimetype"
+        if mimetype_path.exists():
+            zipf.write(mimetype_path, "mimetype", compress_type=zipfile.ZIP_STORED)
+
+        # Add all other files
+        for folder_name, subfolders, filenames in os.walk(epub_translated_dir):
+            folder_path = Path(folder_name)
+            relative_path = folder_path.relative_to(epub_translated_dir)
+
+            # Skip mimetype as it's already added
+            if str(relative_path) == "." and "mimetype" in filenames:
+                filenames.remove("mimetype")
+
+            # Add all files in the current folder
+            for filename in filenames:
+                file_path = folder_path / filename
+                arcname = Path(relative_path) / filename
+                zipf.write(file_path, arcname)
+
+    # Rename the zip file to epub
+    shutil.move(temp_zip, output_epub_path)
+    print(f"Created translated EPUB at {output_epub_path}")
+    return output_epub_path
+
+
+def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(
+        description="Translate EPUB files between languages"
+    )
+    parser.add_argument("--input", "-i", required=True, help="Path to input EPUB file")
+    parser.add_argument(
+        "--source-lang",
+        "-s",
+        default="English",
+        help="Source language (default: English)",
+    )
+    parser.add_argument(
+        "--target-lang",
+        "-t",
+        default="Chinese",
+        help="Target language (default: Chinese)",
+    )
+    parser.add_argument(
+        "--config",
+        "-c",
+        default="config.yaml",
+        help="Path to config file (default: config.yaml)",
+    )
+    parser.add_argument(
+        "--resume",
+        "-r",
+        action="store_true",
+        help="Resume previous translation if available",
+    )
+
+    args = parser.parse_args()
+
+    # Load configuration
+    with open(args.config, "r", encoding="utf-8") as file:
+        config = yaml.safe_load(file)
+
+    # Add command line arguments to config
+    config["input_epub_path"] = args.input
+
+    # Translate the EPUB
+    translate_epub(args.input, args.source_lang, args.target_lang, config)
+
+
+if __name__ == "__main__":
+    main()
