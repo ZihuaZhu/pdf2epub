@@ -18,6 +18,11 @@ import tempfile
 from pathlib import Path
 from PIL import Image
 import fitz  # PyMuPDF
+from loguru import logger
+from logging_config import configure_logging
+
+# Configure logger
+logger = configure_logging()
 
 
 def compress_pdf(input_path, output_path, dpi=150, quality=60, grayscale=False):
@@ -51,12 +56,13 @@ def compress_pdf(input_path, output_path, dpi=150, quality=60, grayscale=False):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_dir_path = Path(temp_dir)
 
-            print(f"Processing {page_count} pages...")
+            logger.info(f"Processing {page_count} pages...")
 
             # Process each page
             for page_num, page in enumerate(pdf_document):
-                sys.stdout.write(f"\rConverting page {page_num + 1}/{page_count}")
-                sys.stdout.flush()
+                # Use logger.debug for progress updates
+                if (page_num + 1) % 10 == 0 or page_num == 0 or page_num == page_count - 1:
+                    logger.debug(f"Converting page {page_num + 1}/{page_count}")
 
                 # Get page dimensions
                 rect = page.rect
@@ -79,7 +85,7 @@ def compress_pdf(input_path, output_path, dpi=150, quality=60, grayscale=False):
                 new_page = output_pdf.new_page(width=rect.width, height=rect.height)
                 new_page.insert_image(rect, filename=str(img_path))
 
-            print("\nSaving compressed PDF...")
+            logger.info("Saving compressed PDF...")
             output_pdf.save(output_path, garbage=4, deflate=True, clean=True)
             output_pdf.close()
 
@@ -96,15 +102,16 @@ def compress_pdf(input_path, output_path, dpi=150, quality=60, grayscale=False):
             "page_count": page_count,
         }
 
-        print(f"Original size: {stats['input_size_mb']:.2f} MB")
-        print(f"Compressed size: {stats['output_size_mb']:.2f} MB")
-        print(f"Compression ratio: {stats['compression_ratio']:.2f}x")
-        print(f"Space saved: {stats['saved_percentage']:.2f}%")
+        logger.success(f"PDF compression complete:")
+        logger.info(f"Original size: {stats['input_size_mb']:.2f} MB")
+        logger.info(f"Compressed size: {stats['output_size_mb']:.2f} MB")
+        logger.info(f"Compression ratio: {stats['compression_ratio']:.2f}x")
+        logger.info(f"Space saved: {stats['saved_percentage']:.2f}%")
 
         return True, stats
 
     except Exception as e:
-        print(f"Error compressing PDF: {e}")
+        logger.error(f"Error compressing PDF: {e}")
         return False, {"error": str(e)}
 
 
@@ -130,16 +137,16 @@ def main():
 
     # Validate input file
     if not os.path.isfile(args.input):
-        print(f"Error: Input file '{args.input}' not found")
+        logger.error(f"Error: Input file '{args.input}' not found")
         return 1
 
     # Validate quality range
     if args.quality < 0 or args.quality > 100:
-        print("Error: Quality must be between 0 and 100")
+        logger.error("Error: Quality must be between 0 and 100")
         return 1
 
-    print(f"Compressing {args.input} to {args.output}")
-    print(
+    logger.info(f"Compressing {args.input} to {args.output}")
+    logger.info(
         f"Settings: DPI={args.dpi}, Quality={args.quality}, Grayscale={args.grayscale}"
     )
 

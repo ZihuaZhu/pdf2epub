@@ -4,6 +4,11 @@ import argparse
 from botocore.exceptions import NoCredentialsError, ClientError
 import sys
 import time
+from logging_config import configure_logging
+from loguru import logger
+
+# Configure logger
+logger = configure_logging()
 
 
 def upload_directory(s3_client, local_folder, bucket_name, s3_folder):
@@ -14,15 +19,15 @@ def upload_directory(s3_client, local_folder, bucket_name, s3_folder):
             s3_path = os.path.join(s3_folder, relative_path)
 
             try:
-                print(f"Uploading {local_path} to {s3_path}")
+                logger.info(f"Uploading {local_path} to {s3_path}")
                 s3_client.upload_file(local_path, bucket_name, s3_path)
             except NoCredentialsError:
-                print("Credentials not available.")
+                logger.error("Credentials not available.")
                 sys.exit(1)
             except ClientError as e:
-                print(f"Failed to upload {local_path} to {s3_path}: {e}")
+                logger.error(f"Failed to upload {local_path} to {s3_path}: {e}")
             except Exception as e:
-                print(f"Unexpected error: {e}")
+                logger.error(f"Unexpected error: {e}")
 
 
 def download_directory(s3_client, bucket_name, s3_folder, local_folder):
@@ -38,10 +43,10 @@ def download_directory(s3_client, bucket_name, s3_folder, local_folder):
                 os.makedirs(local_file_dir, exist_ok=True)
 
                 try:
-                    print(f"Downloading {s3_file_path} to {local_file_path}")
+                    logger.info(f"Downloading {s3_file_path} to {local_file_path}")
                     s3_client.download_file(bucket_name, s3_file_path, local_file_path)
                 except Exception as e:
-                    print(f"Failed to download {s3_file_path}: {e}")
+                    logger.error(f"Failed to download {s3_file_path}: {e}")
 
 
 def main():
@@ -71,22 +76,22 @@ def main():
     except ClientError as e:
         error_code = int(e.response['Error']['Code'])
         if error_code == 404:
-            print(f"The bucket {args.bucket_name} does not exist.")
+            logger.error(f"The bucket {args.bucket_name} does not exist.")
             sys.exit(1)
         else:
-            print(f"An error occurred: {e}")
+            logger.error(f"An error occurred: {e}")
             sys.exit(1)
 
     if args.download:
         download_directory(s3_client, args.bucket_name, args.s3_folder, args.local_folder)
-        print("Download complete. Exiting.")
+        logger.info("Download complete. Exiting.")
     elif args.final:
         upload_directory(s3_client, args.local_folder, args.bucket_name, args.s3_folder)
-        print("Upload complete. Exiting.")
+        logger.info("Upload complete. Exiting.")
     else:
         while True:
             upload_directory(s3_client, args.local_folder, args.bucket_name, args.s3_folder)
-            print("Waiting 5 minutes before next sync...")
+            logger.info("Waiting 5 minutes before next sync...")
             time.sleep(300)  # Sleep for 5 minutes
 
 

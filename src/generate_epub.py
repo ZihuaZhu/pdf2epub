@@ -19,6 +19,11 @@ from google.genai.types import (
     Part,
     SafetySetting,
 )
+from loguru import logger
+from logging_config import configure_logging
+
+# Configure logger
+logger = configure_logging()
 
 
 def load_config():
@@ -117,7 +122,7 @@ def load_generation_progress(progress_file, structure=None):
 
 def clean_unused_images(epub_dir):
     """Remove images that aren't referenced in any HTML file."""
-    print("Cleaning unused images...")
+    logger.info("Cleaning unused images...")
     # Get all image files
     all_images = set()
     for img_path in Path(epub_dir).glob("images/*.*"):
@@ -158,11 +163,11 @@ def clean_unused_images(epub_dir):
         img_path = Path(epub_dir) / "images" / img_name
         try:
             os.remove(img_path)
-            print(f"Removed unused image: {img_name}")
+            logger.debug(f"Removed unused image: {img_name}")
         except Exception as e:
-            print(f"Error removing {img_name}: {e}")
+            logger.error(f"Error removing {img_name}: {e}")
     
-    print(f"Removed {len(unused_images)} unused images.")
+    logger.info(f"Removed {len(unused_images)} unused images.")
 
 
 def create_toc_ncx(structure, book_title, book_uuid, output_path):
@@ -218,7 +223,7 @@ def create_toc_ncx(structure, book_title, book_uuid, output_path):
     with open(output_path, "w", encoding="utf-8") as ncx_file:
         ncx_file.write(ncx_content)
 
-    print(f"Created toc.ncx at {output_path}")
+    logger.info(f"Created toc.ncx at {output_path}")
 
 
 def extract_cover_image(pdf_path, output_dir):
@@ -313,7 +318,7 @@ def extract_images_from_pdf_page(pdf_doc, page_num, images_dir, chapter_index, b
                 image_bytes = img_buffer.getvalue()
                 image_ext = "jpg"
             except Exception as e:
-                print(f"Error converting image: {e}")
+                logger.error(f"Error converting image: {e}")
                 continue
         
         image_filename = f"chapter_{chapter_index}_img_{counter}.{image_ext}"
@@ -367,7 +372,7 @@ def create_cover_html(cover_image_filename, book_title, output_path):
     with open(output_path, "w", encoding="utf-8") as html_file:
         html_file.write(cover_html)
 
-    print(f"Created cover XHTML at {output_path}")
+    logger.info(f"Created cover XHTML at {output_path}")
 
 
 def create_toc_html(structure, book_title, output_path, client, pdf_path, config):
@@ -452,7 +457,7 @@ def create_toc_html(structure, book_title, output_path, client, pdf_path, config
     
     while html_content is None and retry_count < num_retries:
         if retry_count > 0:
-            print(f"Retry attempt {retry_count} for TOC HTML generation...")
+            logger.warning(f"Retry attempt {retry_count} for TOC HTML generation...")
             
         # Generate content
         response = client.models.generate_content(
@@ -496,9 +501,9 @@ def create_toc_html(structure, book_title, output_path, client, pdf_path, config
     try:
         os.remove(temp_pdf_path)
     except Exception as e:
-        print(f"Warning: Could not remove temporary TOC PDF: {e}")
+        logger.warning(f"Could not remove temporary TOC PDF: {e}")
     
-    print(f"Created TOC HTML at {output_path}")
+    logger.info(f"Created TOC HTML at {output_path}")
 
 
 def create_chapter_html(
@@ -706,7 +711,7 @@ def create_chapter_html(
     
     while html_content is None and retry_count < num_retries:
         if retry_count > 0:
-            print(f"Retry attempt {retry_count} for chapter {chapter_index} HTML generation...")
+            logger.warning(f"Retry attempt {retry_count} for chapter {chapter_index} HTML generation...")
             
         # Generate content
         response = client.models.generate_content(
@@ -778,9 +783,9 @@ def create_chapter_html(
     try:
         os.remove(temp_pdf_path)
     except Exception as e:
-        print(f"Warning: Could not remove temporary PDF: {e}")
+        logger.warning(f"Could not remove temporary PDF: {e}")
 
-    print(f"Created Chapter {chapter_index} HTML at {output_path}")
+    logger.info(f"Created Chapter {chapter_index} HTML at {output_path}")
     return chapter_title
 
 
@@ -1011,7 +1016,7 @@ def create_epub(book_title, epub_dir):
 
     # Rename the zip file to epub
     shutil.move(temp_zip, output_epub)
-    print(f"Created EPUB at {output_epub}")
+    logger.success(f"Created EPUB at {output_epub}")
     return output_epub
 
 
@@ -1043,7 +1048,7 @@ def main():
     if not book_title:
         # Fallback to PDF filename if title not in config
         book_title = Path(args.input).stem
-        print(f"Warning: No title found in config, using PDF filename: {book_title}")
+        logger.warning(f"No title found in config, using PDF filename: {book_title}")
 
     # Setup Gemini API
     client = setup_genai_api(api_key)
@@ -1063,13 +1068,13 @@ def main():
     progress = None
 
     if resuming:
-        print("Found existing generation. Attempting to resume...")
+        logger.info("Found existing generation. Attempting to resume...")
         progress = load_generation_progress(progress_file)
         # Generate a UUID for the book (use the same one if resuming)
         book_uuid = progress.get("book_uuid", str(uuid.uuid4()))
     else:
         # Start fresh
-        print("Starting new EPUB generation...")
+        logger.info("Starting new EPUB generation...")
         # Generate a UUID for the book
         book_uuid = str(uuid.uuid4())
         # Initialize progress tracking with structure
@@ -1091,7 +1096,7 @@ def main():
         progress["mimetype_created"] = True
         save_generation_progress(progress_file, progress)
     else:
-        print("Skipping mimetype creation (already done)")
+        logger.info("Skipping mimetype creation (already done)")
 
     # Create the container.xml file if not already done
     if not progress["container_xml_created"]:
@@ -1099,7 +1104,7 @@ def main():
         progress["container_xml_created"] = True
         save_generation_progress(progress_file, progress)
     else:
-        print("Skipping container.xml creation (already done)")
+        logger.info("Skipping container.xml creation (already done)")
 
     # Extract and save the cover image if not already done
     cover_image_filename = progress["cover_image_filename"]
@@ -1109,7 +1114,7 @@ def main():
         progress["cover_extracted"] = True
         save_generation_progress(progress_file, progress)
     else:
-        print(f"Skipping cover extraction (already done): {cover_image_filename}")
+        logger.info(f"Skipping cover extraction (already done): {cover_image_filename}")
 
     # Create the titlepage XHTML if not already done
     if not progress["cover_html_created"]:
@@ -1117,7 +1122,7 @@ def main():
         progress["cover_html_created"] = True
         save_generation_progress(progress_file, progress)
     else:
-        print("Skipping cover HTML creation (already done)")
+        logger.info("Skipping cover HTML creation (already done)")
 
     # Create the stylesheet if not already done
     if not progress["stylesheet_created"]:
@@ -1125,7 +1130,7 @@ def main():
         progress["stylesheet_created"] = True
         save_generation_progress(progress_file, progress)
     else:
-        print("Skipping stylesheet creation (already done)")
+        logger.info("Skipping stylesheet creation (already done)")
 
     # Create the toc.ncx file if not already done
     if not progress["toc_ncx_created"]:
@@ -1133,7 +1138,7 @@ def main():
         progress["toc_ncx_created"] = True
         save_generation_progress(progress_file, progress)
     else:
-        print("Skipping toc.ncx creation (already done)")
+        logger.info("Skipping toc.ncx creation (already done)")
 
     # Create HTML for the table of contents if not already done
     toc_html_path = text_dir / "toc.html"
@@ -1142,7 +1147,7 @@ def main():
         progress["toc_html_created"] = True
         save_generation_progress(progress_file, progress)
     else:
-        print("Skipping TOC HTML creation (already done)")
+        logger.info("Skipping TOC HTML creation (already done)")
 
     # Process each chapter
     previous_chapters = []
@@ -1173,7 +1178,7 @@ def main():
                     break
         
         if chapter_processed:
-            print(f"Skipping chapter {i} (already processed)")
+            logger.info(f"Skipping chapter {i} (already processed)")
             # Load the chapter content for context
             chapter_html_path = text_dir / f"chapter_{i}.html"
             if chapter_html_path.exists():
@@ -1234,7 +1239,7 @@ def main():
         progress["content_opf_created"] = True
         save_generation_progress(progress_file, progress)
     else:
-        print("Skipping content.opf creation (already done)")
+        logger.info("Skipping content.opf creation (already done)")
     
     # Clean up unused images before finalizing the EPUB
     clean_unused_images(epub_dir)
@@ -1242,7 +1247,7 @@ def main():
     # Create the final EPUB file
     epub_path = create_epub(book_title, epub_dir)
 
-    print(f"EPUB creation complete! File saved to: {epub_path}")
+    logger.success(f"EPUB creation complete! File saved to: {epub_path}")
 
 
 if __name__ == "__main__":

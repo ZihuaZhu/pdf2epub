@@ -12,6 +12,11 @@ from google.genai.types import (
 )
 from pdf_compressor import compress_pdf
 import argparse
+from loguru import logger
+from logging_config import configure_logging
+
+# Configure logger
+logger = configure_logging()
 
 
 def load_config(config_path="config.yaml"):
@@ -51,7 +56,7 @@ def preprocess_pdf(input_pdf, output_dir):
 
     # If file size > 45MB, compress it
     if file_size_mb > 45:
-        print(f"PDF file size ({file_size_mb:.2f}MB) exceeds 45MB. Compressing...")
+        logger.warning(f"PDF file size ({file_size_mb:.2f}MB) exceeds 45MB. Compressing...")
 
         # Backup original PDF if not already done
         if not original_pdf.exists():
@@ -71,7 +76,7 @@ def preprocess_pdf(input_pdf, output_dir):
         # Try compression with increasingly aggressive settings until size is under limit
         for dpi, quality, grayscale in compression_settings:
             try:
-                print(f"Trying compression with DPI={dpi}, quality={quality}, grayscale={grayscale}...")
+                logger.info(f"Trying compression with DPI={dpi}, quality={quality}, grayscale={grayscale}...")
                 success, stats = compress_pdf(
                     str(processed_pdf), 
                     str(temp_output), 
@@ -82,7 +87,7 @@ def preprocess_pdf(input_pdf, output_dir):
 
                 if success:
                     compressed_size_mb = stats["output_size_mb"]
-                    print(
+                    logger.info(
                         f"Compression result: {compressed_size_mb:.2f}MB ({stats['saved_percentage']:.1f}% reduction)"
                     )
 
@@ -92,14 +97,14 @@ def preprocess_pdf(input_pdf, output_dir):
                         if temp_output.exists():
                             shutil.move(str(temp_output), str(processed_pdf))
                     else:
-                        print("Compression did not reduce file size. Keeping original.")
+                        logger.warning("Compression did not reduce file size. Keeping original.")
 
                     # If we're under 45MB, we're done
                     if compressed_size_mb <= 45:
                         break
 
             except Exception as e:
-                print(f"Compression attempt failed: {e}")
+                logger.error(f"Compression attempt failed: {e}")
 
             # Clean up temp file if it exists
             if temp_output.exists():
@@ -108,7 +113,7 @@ def preprocess_pdf(input_pdf, output_dir):
         # Check final file size
         final_size_mb = processed_pdf.stat().st_size / (1024 * 1024)
         if final_size_mb > 45:
-            print(f"Warning: PDF is still {final_size_mb:.2f}MB (larger than 45MB) after compression")
+            logger.warning(f"PDF is still {final_size_mb:.2f}MB (larger than 45MB) after compression")
 
     return processed_pdf
 
@@ -185,7 +190,7 @@ def analyze_pdf_structure(client: genai.Client, pdf_path, book_title, config):
     
     while response is None and retry_count < num_retries:
         if retry_count > 0:
-            print(f"Retry attempt {retry_count} for PDF structure analysis...")
+            logger.warning(f"Retry attempt {retry_count} for PDF structure analysis...")
             
         try:
             # Generate content with structured response
@@ -216,7 +221,7 @@ def analyze_pdf_structure(client: genai.Client, pdf_path, book_title, config):
                 )
             )
         except Exception as e:
-            print(f"API call failed: {e}")
+            logger.error(f"API call failed: {e}")
             response = None
         
         retry_count += 1
@@ -224,7 +229,7 @@ def analyze_pdf_structure(client: genai.Client, pdf_path, book_title, config):
     if response is None:
         raise ValueError(f"Failed to analyze PDF structure after {num_retries} attempts")
     
-    print(response)
+    logger.debug(f"API response: {response}")
 
     # Parse the response as JSON
     return json.loads(response.text)
@@ -249,7 +254,7 @@ def main():
     if not book_title:
         # Fallback to PDF filename if title not in config
         book_title = input_pdf.stem
-        print(f"Warning: No title found in config, using PDF filename: {book_title}")
+        logger.warning(f"No title found in config, using PDF filename: {book_title}")
     
     # Define output directory based on config title
     output_dir = Path("output") / Path(book_title)
@@ -266,7 +271,7 @@ def main():
     processed_pdf = preprocess_pdf(input_pdf, output_dir)
     
     # Analyze PDF structure using Gemini
-    print(f"Analyzing PDF structure for '{book_title}'...")
+    logger.info(f"Analyzing PDF structure for '{book_title}'...")
     try:
         structure = analyze_pdf_structure(client, processed_pdf, book_title, config)
 
@@ -275,24 +280,24 @@ def main():
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(structure, f, ensure_ascii=False, indent=2)
 
-        print(f"Book structure analysis completed and saved to {output_file}")
+        logger.success(f"Book structure analysis completed and saved to {output_file}")
 
         # Print a summary
-        print("\nStructure Summary:")
-        print(
+        logger.info("\nStructure Summary:")
+        logger.info(
             f"Cover page: {structure.get('cover_page', {}).get('page_number', 'Not found')}"
         )
-        print(
+        logger.info(
             f"Table of contents: Pages {structure.get('table_of_contents', {}).get('start_page', 'N/A')}-"
             f"{structure.get('table_of_contents', {}).get('end_page', 'N/A')}"
         )
-        print(f"Total chapters: {len(structure.get('chapters', []))}")
-        print(
+        logger.info(f"Total chapters: {len(structure.get('chapters', []))}")
+        logger.info(
             f"Back cover: {structure.get('back_cover', {}).get('page_number', 'Not found')}"
         )
 
     except Exception as e:
-        print(f"Error analyzing PDF structure: {e}")
+        logger.error(f"Error analyzing PDF structure: {e}")
         raise
 
 

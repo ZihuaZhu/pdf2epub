@@ -15,6 +15,11 @@ from google.genai.types import (
 )
 import xml.etree.ElementTree as ET
 import argparse
+from loguru import logger
+from logging_config import configure_logging
+
+# Configure logger
+logger = configure_logging()
 
 
 def load_config():
@@ -54,7 +59,7 @@ def extract_epub(epub_path, extract_dir):
     """Extract EPUB contents to a directory."""
     with zipfile.ZipFile(epub_path, "r") as zip_ref:
         zip_ref.extractall(extract_dir)
-    print(f"Extracted EPUB to {extract_dir}")
+    logger.info(f"Extracted EPUB to {extract_dir}")
 
 
 def parse_toc_ncx(ncx_path):
@@ -165,7 +170,7 @@ def translate_html_content(
     
     while translated_html is None and retry_count < num_retries:
         if retry_count > 0:
-            print(f"Retry attempt {retry_count} for translating HTML content...")
+            logger.warning(f"Retry attempt {retry_count} for translating HTML content...")
             
         # Generate content
         response = client.models.generate_content(
@@ -361,7 +366,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
     if not original_book_title:
         # Fallback to input filename if title not in config
         original_book_title = input_file_name
-        print(f"Warning: No title found in config, using input filename: {original_book_title}")
+        logger.warning(f"No title found in config, using input filename: {original_book_title}")
 
     # Setup API
     api_key = config.get("google_api_key")
@@ -382,7 +387,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
     progress = None
 
     if resuming:
-        print("Found existing translation. Attempting to resume...")
+        logger.info("Found existing translation. Attempting to resume...")
         progress = load_translation_progress(progress_file)
     else:
         # Start fresh
@@ -420,21 +425,21 @@ def translate_epub(input_epub_path, source_language, target_language, config):
     if not progress["book_title_translated"]:
         if "target_title" in config:
             translated_book_title = config["target_title"]
-            print(f"Original title: {original_book_title}")
-            print(f"Using target title from config: {translated_book_title}")
+            logger.info(f"Original title: {original_book_title}")
+            logger.info(f"Using target title from config: {translated_book_title}")
         else:
             translated_book_title = translate_book_title(
                 original_book_title, source_language, target_language, client, config
             )
-            print(f"Original title: {original_book_title}")
-            print(f"Translated title: {translated_book_title}")
+            logger.info(f"Original title: {original_book_title}")
+            logger.info(f"Translated title: {translated_book_title}")
         
         progress["translated_book_title"] = translated_book_title
         progress["book_title_translated"] = True
         save_translation_progress(progress_file, progress)
     else:
         translated_book_title = progress["translated_book_title"]
-        print(f"Using existing translated title: {translated_book_title}")
+        logger.info(f"Using existing translated title: {translated_book_title}")
 
     # Translate chapter titles if not already done
     if not progress["toc_translated"]:
@@ -454,7 +459,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
         save_translation_progress(progress_file, progress)
     else:
         # Use existing translated chapter titles
-        print("Using existing translated chapter titles")
+        logger.info("Using existing translated chapter titles")
         translated_chapters = progress["translated_chapters"]
 
     # Find all HTML files
@@ -468,7 +473,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
         if Path(html_file).name not in chapter_files
     ]
 
-    print(
+    logger.info(
         f"Found {len(chapters)} chapters in TOC and {len(non_chapter_html_files)} additional HTML files"
     )
 
@@ -527,7 +532,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
 
     for i, chapter in enumerate(translated_chapters[start_index:], start=start_index):
         if progress["translated_chapters"][i].get("translated", False):
-            print(
+            logger.info(
                 f"Skipping already translated chapter {i + 1}/{len(translated_chapters)}: {chapter['title']}"
             )
             continue
@@ -541,7 +546,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
             break
 
         if chapter_path:
-            print(
+            logger.info(
                 f"Translating chapter {i + 1}/{len(translated_chapters)}: {chapter['original_title']} → {chapter['title']}"
             )
 
@@ -583,7 +588,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
         progress["translated_html_files"][start_html_index:], start=start_html_index
     ):
         if html_file_info.get("translated", False):
-            print(
+            logger.info(
                 f"Skipping already translated HTML file {i + 1}/{len(progress['translated_html_files'])}: {html_file_info['src']}"
             )
             continue
@@ -591,7 +596,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
         html_path = Path(epub_translated_dir) / html_file_info["src"]
 
         if html_path.exists():
-            print(
+            logger.info(
                 f"Translating additional HTML file {i + 1}/{len(progress['translated_html_files'])}: {html_file_info['src']}"
             )
 
@@ -656,7 +661,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
 
     # Rename the zip file to epub
     shutil.move(temp_zip, output_epub_path)
-    print(f"Created translated EPUB at {output_epub_path}")
+    logger.success(f"Created translated EPUB at {output_epub_path}")
     return output_epub_path
 
 
