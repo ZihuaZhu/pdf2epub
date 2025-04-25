@@ -51,7 +51,7 @@ def main():
     parser.add_argument("access_key", help="S3 Access Key ID")
     parser.add_argument("secret_key", help="S3 Secret Access Key")
     parser.add_argument("endpoint_url", help="S3 Endpoint URL")
-    parser.add_argument("--bucket_name", help="S3 Bucket Name", default="bookepub")
+    parser.add_argument("bucket_name", help="S3 Bucket Name", default="bookepub")
     parser.add_argument("--final", action="store_true", help="Run upload once and then quit")
     parser.add_argument("--download", action="store_true", help="Download from S3 instead of uploading")
 
