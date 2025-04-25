@@ -86,11 +86,13 @@ def parse_toc_ncx(ncx_path):
 
         # Get chapter source file
         if ns:
-            content_elem = nav_point.find("./ncx:content", ns) or nav_point.find(
-                ".//ncx:content", ns
-            )
+            content_elem = nav_point.find("./ncx:content", ns)
+            if content_elem is None:
+                content_elem = nav_point.find(".//ncx:content", ns)
         else:
-            content_elem = nav_point.find("./content") or nav_point.find(".//content")
+            content_elem = nav_point.find("./content")
+            if content_elem is None:
+                content_elem = nav_point.find(".//content")
 
         if content_elem is not None:
             src = content_elem.get("src")
@@ -637,14 +639,12 @@ def main():
     parser.add_argument(
         "--source-lang",
         "-s",
-        default="English",
-        help="Source language (default: English)",
+        help="Source language (overrides config.yaml)",
     )
     parser.add_argument(
         "--target-lang",
         "-t",
-        default="Chinese",
-        help="Target language (default: Chinese)",
+        help="Target language (overrides config.yaml)",
     )
     parser.add_argument(
         "--config",
@@ -665,11 +665,20 @@ def main():
     with open(args.config, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
 
+    # Get source and target languages from config or defaults
+    source_lang = args.source_lang
+    if source_lang is None:
+        source_lang = config.get("source_language", "English")
+        
+    target_lang = args.target_lang
+    if target_lang is None:
+        target_lang = config.get("target_language", "Chinese")
+
     # Add command line arguments to config
     config["input_epub_path"] = args.input
 
     # Translate the EPUB
-    translate_epub(args.input, args.source_lang, args.target_lang, config)
+    translate_epub(args.input, source_lang, target_lang, config)
 
 
 if __name__ == "__main__":
