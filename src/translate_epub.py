@@ -36,6 +36,9 @@ def ensure_directory(directory_path):
 
 def clean_html_response(html_content):
     """Clean the HTML response from Gemini."""
+    if html_content is None:
+        return None
+        
     html_content = re.sub(r"```html\s*", "", html_content)
     html_content = re.sub(r"```\s*$", "", html_content)
     html_content = re.sub(r"```[a-zA-Z]*\s*", "", html_content)
@@ -155,35 +158,49 @@ def translate_html_content(
     # Get model from config with fallback
     model = config.get("model", "gemini-2.5-pro-preview-03-25")
     
-    # Generate content
-    response = client.models.generate_content(
-        model=model,
-        contents=prompt,
-        config=GenerateContentConfig(
-            temperature=0.2,
-            safety_settings=[
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-            ],
-        ),
-    )
+    # Get number of retries from config
+    num_retries = config.get("num_retries", 3)
+    retry_count = 0
+    translated_html = None
+    
+    while translated_html is None and retry_count < num_retries:
+        if retry_count > 0:
+            print(f"Retry attempt {retry_count} for translating HTML content...")
+            
+        # Generate content
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=GenerateContentConfig(
+                temperature=0.2,
+                safety_settings=[
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                ],
+            ),
+        )
 
-    # Clean and return the translated HTML
-    translated_html = clean_html_response(response.text)
+        # Clean and return the translated HTML
+        translated_html = clean_html_response(response.text)
+        retry_count += 1
+    
+    if translated_html is None:
+        raise ValueError(f"Failed to translate HTML content after {num_retries} attempts")
+        
     return translated_html
 
 
@@ -392,13 +409,19 @@ def translate_epub(input_epub_path, source_language, target_language, config):
     # Parse toc.ncx to get chapter structure
     chapters = parse_toc_ncx(toc_ncx_path)
 
-    # Translate the book title if not already done
+    # Check if target_title is provided in config, otherwise translate the book title
     if not progress["book_title_translated"]:
-        translated_book_title = translate_book_title(
-            original_book_title, source_language, target_language, client, config
-        )
-        print(f"Original title: {original_book_title}")
-        print(f"Translated title: {translated_book_title}")
+        if "target_title" in config:
+            translated_book_title = config["target_title"]
+            print(f"Original title: {original_book_title}")
+            print(f"Using target title from config: {translated_book_title}")
+        else:
+            translated_book_title = translate_book_title(
+                original_book_title, source_language, target_language, client, config
+            )
+            print(f"Original title: {original_book_title}")
+            print(f"Translated title: {translated_book_title}")
+        
         progress["translated_book_title"] = translated_book_title
         progress["book_title_translated"] = True
         save_translation_progress(progress_file, progress)

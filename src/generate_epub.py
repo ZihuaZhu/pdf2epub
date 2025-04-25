@@ -54,6 +54,9 @@ def get_pdf_page_count(pdf_path):
 
 def clean_html_response(html_content):
     """Clean the HTML response from Gemini to remove code blocks and other content."""
+    if html_content is None:
+        return None
+        
     # Remove markdown code block markers if present
     html_content = re.sub(r"```html\s*", "", html_content)
     html_content = re.sub(r"```\s*$", "", html_content)
@@ -442,8 +445,50 @@ def create_toc_html(structure, book_title, output_path, client, pdf_path, config
         ),
     )
     
-    # Clean and write the HTML to the output file
-    html_content = clean_html_response(response.text)
+    # Get number of retries from config
+    num_retries = config.get("num_retries", 3)
+    retry_count = 0
+    html_content = None
+    
+    while html_content is None and retry_count < num_retries:
+        if retry_count > 0:
+            print(f"Retry attempt {retry_count} for TOC HTML generation...")
+            
+        # Generate content
+        response = client.models.generate_content(
+            model=model,
+            contents=parts,
+            config=GenerateContentConfig(
+                temperature=0.1,
+                safety_settings=[
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                ],
+            ),
+        )
+        
+        # Clean the HTML response
+        html_content = clean_html_response(response.text)
+        retry_count += 1
+    
+    if html_content is None:
+        raise ValueError(f"Failed to generate TOC HTML after {num_retries} attempts")
+    
+    # Write the HTML to the output file
     with open(output_path, "w", encoding="utf-8") as html_file:
         html_file.write(html_content)
     
@@ -654,8 +699,48 @@ def create_chapter_html(
         ),
     )
 
-    # Clean and extract the HTML content
-    html_content = clean_html_response(response.text)
+    # Get number of retries from config
+    num_retries = config.get("num_retries", 3)
+    retry_count = 0
+    html_content = None
+    
+    while html_content is None and retry_count < num_retries:
+        if retry_count > 0:
+            print(f"Retry attempt {retry_count} for chapter {chapter_index} HTML generation...")
+            
+        # Generate content
+        response = client.models.generate_content(
+            model=model,
+            contents=parts,
+            config=GenerateContentConfig(
+                temperature=0.1,
+                safety_settings=[
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                    SafetySetting(
+                        category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                        threshold=HarmBlockThreshold.BLOCK_NONE,
+                    ),
+                ],
+            ),
+        )
+        
+        # Clean the HTML response
+        html_content = clean_html_response(response.text)
+        retry_count += 1
+    
+    if html_content is None:
+        raise ValueError(f"Failed to generate chapter {chapter_index} HTML after {num_retries} attempts")
     
     # Process image placeholders
     with fitz.open(temp_pdf_path) as chapter_pdf:

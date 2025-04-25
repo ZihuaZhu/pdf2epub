@@ -1,6 +1,12 @@
 title: The Shock Doctrine
+target_title: 休克理论
 author: Naomi Klein
 google_api_key: example_api_key
 model: gemini-2.5-pro-preview-03-25
 target_language: Chinese
 source_language: English
+s3_access_key_id: example_access_key_id
+s3_secret_access_key: example_secret_access_key
+s3_bucket_name: example_bucket_name
+s3_endpoint: https://example.com
+num_retries: 3
