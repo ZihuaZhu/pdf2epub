@@ -5,6 +5,10 @@ description = ""
 authors = ["ShenSheiBot <shensheibot@protonmail.com>"]
 readme = "README.md"
 
+packages = [
+    {include = "src"}
+]
+
 [tool.poetry.dependencies]
 python = "^3.11"
 pyyaml = "^6.0.2"

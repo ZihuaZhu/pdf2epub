@@ -3,3 +3,5 @@
 *.pdf
 /config.yaml
 *.epub
+*.env
+*__pycache__/

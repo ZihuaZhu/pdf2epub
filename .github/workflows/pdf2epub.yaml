@@ -33,8 +33,11 @@ jobs:
         S3_ENDPOINT=$(grep "^s3_endpoint:" config.yaml | cut -d ":" -f2- | xargs)
         S3_BUCKET_NAME=$(grep "^s3_bucket_name:" config.yaml | cut -d ":" -f2- | xargs)
         
+        # Add src to PYTHONPATH
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        
         # Download files using extracted values
-        python monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME --download
+        python src/utils/monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME --download
 
     - name: Run breakdown script to parse the table of contents in input.pdf
       run: |
@@ -45,18 +48,21 @@ jobs:
         S3_ENDPOINT=$(grep "^s3_endpoint:" config.yaml | cut -d ":" -f2- | xargs)
         S3_BUCKET_NAME=$(grep "^s3_bucket_name:" config.yaml | cut -d ":" -f2- | xargs)
         
+        # Add src to PYTHONPATH
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        
         # Check if structure already exists
         if [ -f "output/$TITLE/book_structure.json" ]; then
           echo "Book structure already exists, skipping monitor.py and breakdown.py"
         else
           # Run monitor in background with extracted values
-          python monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME & 
+          python src/utils/monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME & 
           
           # Run breakdown script
           python src/breakdown.py -c config.yaml -i output/$TITLE/input.pdf
           
           # Run final upload with extracted values
-          python monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME --final
+          python src/utils/monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME --final
         fi
 
     - name: Generate EPUB
@@ -68,11 +74,14 @@ jobs:
         S3_ENDPOINT=$(grep "^s3_endpoint:" config.yaml | cut -d ":" -f2- | xargs)
         S3_BUCKET_NAME=$(grep "^s3_bucket_name:" config.yaml | cut -d ":" -f2- | xargs)
         
+        # Add src to PYTHONPATH
+        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        
         # Run monitor in background with extracted values
-        python monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME & 
+        python src/utils/monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME & 
         
         # Run generate_epub.py
         python src/generate_epub.py --input output/$TITLE/input.pdf --config config.yaml
         
         # Run final upload with extracted values
-        python monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME --final
+        python src/utils/monitor.py output/$TITLE $TITLE $S3_ACCESS_KEY $S3_SECRET_KEY $S3_ENDPOINT $S3_BUCKET_NAME --final

@@ -10,11 +10,11 @@ from google.genai.types import (
     Part,
     SafetySetting
 )
-from network_utils import generate_content_with_retry, get_default_generation_config
+from src.utils.network_utils import generate_content_with_retry, get_default_generation_config
 from pdf_compressor import compress_pdf
 import argparse
 from loguru import logger
-from logging_config import configure_logging
+from src.utils.logging_config import configure_logging
 
 # Configure logger
 logger = configure_logging()

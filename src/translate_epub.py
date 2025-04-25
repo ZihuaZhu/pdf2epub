@@ -13,11 +13,11 @@ from google.genai.types import (
     HarmCategory,
     SafetySetting,
 )
-from network_utils import generate_content_with_retry, get_default_generation_config
+from src.utils.network_utils import generate_content_with_retry, get_default_generation_config
 import xml.etree.ElementTree as ET
 import argparse
 from loguru import logger
-from logging_config import configure_logging
+from src.utils.logging_config import configure_logging
 
 # Configure logger
 logger = configure_logging()

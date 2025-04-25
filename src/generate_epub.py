@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image
 from google import genai
 import httpx
-from network_utils import generate_content_with_retry, get_default_generation_config
+from src.utils.network_utils import generate_content_with_retry, get_default_generation_config
 from google.genai.types import (
     GenerateContentConfig,
     HarmBlockThreshold,
@@ -23,7 +23,7 @@ from google.genai.types import (
     SafetySetting,
 )
 from loguru import logger
-from logging_config import configure_logging
+from src.utils.logging_config import configure_logging
 
 # Configure logger
 logger = configure_logging()
