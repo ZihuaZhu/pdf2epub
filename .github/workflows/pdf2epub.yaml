@@ -40,7 +40,7 @@ jobs:
         echo "::add-mask::$GOOGLE_API_KEY"
         
         # Add src to PYTHONPATH
-        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        export PYTHONPATH=$PYTHONPATH:$(pwd)/src
         
         # Download files using extracted values
         python src/utils/monitor.py "output/$TITLE" "$TITLE" "$S3_ACCESS_KEY" "$S3_SECRET_KEY" "$S3_ENDPOINT" "$S3_BUCKET_NAME" --download
@@ -59,7 +59,7 @@ jobs:
         echo "::add-mask::$S3_SECRET_KEY"
         
         # Add src to PYTHONPATH
-        export PYTHONPATH=$PYTHONPATH:$(pwd)
+        export PYTHONPATH=$PYTHONPATH:$(pwd)/src
         
         # Check if structure already exists
         if [ -f "output/$TITLE/book_structure.json" ]; then

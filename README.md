@@ -63,7 +63,7 @@ title: 书籍原始标题
 target_title: 书籍翻译后的标题
 author: 作者名
 google_api_key: 你的Google API密钥
-model: gemini-2.5-pro-preview-03-25
+model: gemini-2.5-pro-preview-03-25 or gemini-2.5-flash-preview-04-17
 target_language: Chinese
 source_language: English
 s3_access_key_id: 你的S3访问密钥ID
@@ -172,7 +172,7 @@ output/
 
 ## 注意事项
 
-- 目前只推荐使用 gemini-pro-2.5 模型，因为只有这个模型能将 PDF 直接转换为 HTML
+- 目前只推荐使用 gemini-2.5-pro 或 gemini-2.5-flash 模型，因为只有这个模型能将 PDF 直接转换为 HTML
 - 书名中不要加特殊符号，以避免文件路径问题
 - PDF 文件大小限制为 45MB，超过此限制的文件将被自动压缩
 - 处理大型 PDF 可能需要较长时间，请耐心等待

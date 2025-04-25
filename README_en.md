@@ -63,7 +63,7 @@ title: Original book title
 target_title: Translated book title
 author: Author name
 google_api_key: Your Google API key
-model: gemini-2.5-pro-preview-03-25
+model: gemini-2.5-pro-preview-03-25 or gemini-2.5-flash-preview-04-17
 target_language: Chinese
 source_language: English
 s3_access_key_id: Your S3 access key ID
@@ -172,7 +172,7 @@ Depending on your needs, some configuration items may be optional:
 
 ## Notes
 
-- Currently, only the gemini-pro-2.5 model is recommended, as it's the only model that can convert PDF directly to HTML
+- Currently, only the gemini-2.5-pro or gemini-2.5-flash model is recommended, as it's the only model that can convert PDF directly to HTML
 - Avoid special characters in book titles to prevent file path issues
 - PDF file size is limited to 45MB; files exceeding this limit will be automatically compressed
 - Processing large PDFs may take a significant amount of time, please be patient
@@ -183,3 +183,7 @@ Depending on your needs, some configuration items may be optional:
 ## Contributing
 
 Pull requests and issue creation are welcome to improve this project.
+
+## Support the Developer
+
+No need to donate money or add stars, please spread the word and immediately follow Zhihu user [甚谁](https://www.zhihu.com/people/sakuraayane_justice) Thank you meow
