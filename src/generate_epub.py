@@ -6,6 +6,7 @@ import fitz  # PyMuPDF
 import yaml
 import zipfile
 import re
+import argparse
 from io import BytesIO
 from datetime import datetime
 from pathlib import Path
@@ -68,6 +69,47 @@ def clean_html_response(html_content):
         html_content = html_match.group(0)
 
     return html_content.strip()
+
+
+def save_generation_progress(progress_file, progress_data):
+    """Save generation progress to a JSON file."""
+    with open(progress_file, "w", encoding="utf-8") as f:
+        json.dump(progress_data, f, indent=2)
+
+
+def load_generation_progress(progress_file, structure=None):
+    """Load generation progress from a JSON file."""
+    if Path(progress_file).exists():
+        with open(progress_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    
+    # Initialize with default values
+    progress = {
+        "cover_extracted": False,
+        "cover_html_created": False,
+        "stylesheet_created": False,
+        "toc_ncx_created": False,
+        "toc_html_created": False,
+        "container_xml_created": False,
+        "mimetype_created": False,
+        "content_opf_created": False,
+        "processed_chapters": [],
+        "last_processed_chapter_index": -1,
+        "cover_image_filename": "",
+        "chapter_titles": [],
+    }
+    
+    # If structure is provided, initialize chapters with generated: false
+    if structure:
+        progress["chapters"] = []
+        for i, chapter in enumerate(structure["chapters"], 1):
+            progress["chapters"].append({
+                "index": i,
+                "title": chapter["title"],
+                "generated": False
+            })
+    
+    return progress
 
 
 def clean_unused_images(epub_dir):
@@ -889,14 +931,24 @@ def create_epub(book_title, epub_dir):
 
 
 def main():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Generate EPUB from PDF")
+    parser.add_argument("--input", "-i", required=True, help="Path to input PDF file")
+    parser.add_argument("--resume", "-r", action="store_true", help="Resume previous generation if available")
+    parser.add_argument(
+        "--config",
+        "-c",
+        default="config.yaml",
+        help="Path to config file (default: config.yaml)",
+    )
+    args = parser.parse_args()
+
     # Load configuration
-    config = load_config()
+    with open(args.config, "r", encoding="utf-8") as file:
+        config = yaml.safe_load(file)
     api_key = config.get("google_api_key")
     book_title = config.get("title")
     author = config.get("author")
-
-    # Generate a UUID for the book
-    book_uuid = str(uuid.uuid4())
 
     # Check if API key exists
     if not api_key:
@@ -913,6 +965,25 @@ def main():
     images_dir = epub_dir / "images"
     text_dir = epub_dir / "text"
     meta_inf_dir = epub_dir / "META-INF"
+    progress_file = Path("output") / Path(book_title) / "generation_progress.json"
+
+    # Check if we're resuming a previous generation
+    resuming = epub_dir.exists() and progress_file.exists()
+    progress = None
+
+    if resuming:
+        print("Found existing generation. Attempting to resume...")
+        progress = load_generation_progress(progress_file)
+        # Generate a UUID for the book (use the same one if resuming)
+        book_uuid = progress.get("book_uuid", str(uuid.uuid4()))
+    else:
+        # Start fresh
+        print("Starting new EPUB generation...")
+        # Generate a UUID for the book
+        book_uuid = str(uuid.uuid4())
+        # Initialize progress tracking with structure
+        progress = load_generation_progress(progress_file, structure)
+        progress["book_uuid"] = book_uuid
 
     # Ensure directories exist
     ensure_directory(epub_dir)
@@ -921,35 +992,105 @@ def main():
     ensure_directory(meta_inf_dir)
 
     # Path to the PDF file
-    pdf_path = Path("output") / Path(book_title) / "input.pdf"
+    pdf_path = Path(args.input)
 
-    # Create the mimetype file
-    create_mimetype(epub_dir / "mimetype")
+    # Create the mimetype file if not already done
+    if not progress["mimetype_created"]:
+        create_mimetype(epub_dir / "mimetype")
+        progress["mimetype_created"] = True
+        save_generation_progress(progress_file, progress)
+    else:
+        print("Skipping mimetype creation (already done)")
 
-    # Create the container.xml file
-    create_container_xml(meta_inf_dir / "container.xml")
+    # Create the container.xml file if not already done
+    if not progress["container_xml_created"]:
+        create_container_xml(meta_inf_dir / "container.xml")
+        progress["container_xml_created"] = True
+        save_generation_progress(progress_file, progress)
+    else:
+        print("Skipping container.xml creation (already done)")
 
-    # Extract and save the cover image
-    cover_image_filename = extract_cover_image(pdf_path, epub_dir)
+    # Extract and save the cover image if not already done
+    cover_image_filename = progress["cover_image_filename"]
+    if not progress["cover_extracted"]:
+        cover_image_filename = extract_cover_image(pdf_path, epub_dir)
+        progress["cover_image_filename"] = cover_image_filename
+        progress["cover_extracted"] = True
+        save_generation_progress(progress_file, progress)
+    else:
+        print(f"Skipping cover extraction (already done): {cover_image_filename}")
 
-    # Create the titlepage XHTML
-    create_cover_html(cover_image_filename, book_title, epub_dir / "titlepage.xhtml")
+    # Create the titlepage XHTML if not already done
+    if not progress["cover_html_created"]:
+        create_cover_html(cover_image_filename, book_title, epub_dir / "titlepage.xhtml")
+        progress["cover_html_created"] = True
+        save_generation_progress(progress_file, progress)
+    else:
+        print("Skipping cover HTML creation (already done)")
 
-    # Create the stylesheet
-    create_stylesheet(epub_dir / "stylesheet.css")
+    # Create the stylesheet if not already done
+    if not progress["stylesheet_created"]:
+        create_stylesheet(epub_dir / "stylesheet.css")
+        progress["stylesheet_created"] = True
+        save_generation_progress(progress_file, progress)
+    else:
+        print("Skipping stylesheet creation (already done)")
 
-    # Create the toc.ncx file
-    create_toc_ncx(structure, book_title, book_uuid, epub_dir / "toc.ncx")
+    # Create the toc.ncx file if not already done
+    if not progress["toc_ncx_created"]:
+        create_toc_ncx(structure, book_title, book_uuid, epub_dir / "toc.ncx")
+        progress["toc_ncx_created"] = True
+        save_generation_progress(progress_file, progress)
+    else:
+        print("Skipping toc.ncx creation (already done)")
 
-    # Create HTML for the table of contents
+    # Create HTML for the table of contents if not already done
     toc_html_path = text_dir / "toc.html"
-    create_toc_html(structure, book_title, toc_html_path, client, pdf_path, config)
+    if not progress["toc_html_created"]:
+        create_toc_html(structure, book_title, toc_html_path, client, pdf_path, config)
+        progress["toc_html_created"] = True
+        save_generation_progress(progress_file, progress)
+    else:
+        print("Skipping TOC HTML creation (already done)")
 
     # Process each chapter
     previous_chapters = []
-    chapter_titles = []
+    chapter_titles = progress["chapter_titles"]
+    
+    # Ensure chapters array exists in progress
+    if "chapters" not in progress:
+        progress["chapters"] = []
+        for i, chapter in enumerate(structure["chapters"], 1):
+            progress["chapters"].append({
+                "index": i,
+                "title": chapter["title"],
+                "generated": False
+            })
+        save_generation_progress(progress_file, progress)
 
     for i, chapter in enumerate(structure["chapters"], 1):
+        # Check if chapter is already processed
+        chapter_processed = False
+        if i <= progress["last_processed_chapter_index"]:
+            # For backward compatibility
+            chapter_processed = True
+        elif "chapters" in progress:
+            # Find the chapter in the chapters array
+            for ch in progress["chapters"]:
+                if ch["index"] == i and ch["generated"]:
+                    chapter_processed = True
+                    break
+        
+        if chapter_processed:
+            print(f"Skipping chapter {i} (already processed)")
+            # Load the chapter content for context
+            chapter_html_path = text_dir / f"chapter_{i}.html"
+            if chapter_html_path.exists():
+                with open(chapter_html_path, "r", encoding="utf-8") as f:
+                    chapter_content = f.read()
+                    previous_chapters.append(chapter_content)
+            continue
+
         chapter_html_path = text_dir / f"chapter_{i}.html"
         chapter_title = create_chapter_html(
             chapter,
@@ -963,25 +1104,46 @@ def main():
             previous_chapters,
             config,
         )
-        chapter_titles.append(chapter_title)
+        
+        # Update progress
+        if len(chapter_titles) < i:
+            chapter_titles.append(chapter_title)
+        else:
+            chapter_titles[i - 1] = chapter_title
+            
+        progress["chapter_titles"] = chapter_titles
+        progress["last_processed_chapter_index"] = i
+        
+        # Update the chapter's generated status in the chapters array
+        for ch in progress["chapters"]:
+            if ch["index"] == i:
+                ch["generated"] = True
+                break
+        
+        save_generation_progress(progress_file, progress)
 
         # Add processed chapter to context for next chapters
         with open(chapter_html_path, "r", encoding="utf-8") as f:
             chapter_content = f.read()
             previous_chapters.append(chapter_content)
-            # Save money
+            # Save money by only keeping the most recent chapter
             # previous_chapters = [chapter_content]
 
-    # Create the content.opf file
-    create_content_opf(
-        book_title,
-        book_uuid,
-        author,
-        chapter_titles,
-        cover_image_filename,
-        epub_dir / "content.opf",
-        epub_dir,
-    )
+    # Create the content.opf file if not already done
+    if not progress["content_opf_created"]:
+        create_content_opf(
+            book_title,
+            book_uuid,
+            author,
+            chapter_titles,
+            cover_image_filename,
+            epub_dir / "content.opf",
+            epub_dir,
+        )
+        progress["content_opf_created"] = True
+        save_generation_progress(progress_file, progress)
+    else:
+        print("Skipping content.opf creation (already done)")
     
     # Clean up unused images before finalizing the EPUB
     clean_unused_images(epub_dir)

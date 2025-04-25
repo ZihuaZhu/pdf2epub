@@ -14,9 +14,9 @@ from pdf_compressor import compress_pdf
 import argparse
 
 
-def load_config():
-    """Load configuration from config.yaml file."""
-    with open("config.yaml", "r", encoding="utf-8") as file:
+def load_config(config_path="config.yaml"):
+    """Load configuration from config file."""
+    with open(config_path, "r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
     return config
 
@@ -216,10 +216,11 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description='Process a PDF book for structure analysis.')
     parser.add_argument('-i', '--input', required=True, help='Path to input PDF file')
+    parser.add_argument('-c', '--config', default='config.yaml', help='Path to config file (default: config.yaml)')
     args = parser.parse_args()
     
     # Load configuration
-    config = load_config()
+    config = load_config(args.config)
     api_key = config.get("google_api_key")
     
     # Get input PDF path and extract book title from path
