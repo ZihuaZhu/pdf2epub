@@ -58,36 +58,40 @@ def parse_toc_ncx(ncx_path):
     """Parse the toc.ncx file to get chapter structure."""
     tree = ET.parse(ncx_path)
     root = tree.getroot()
-    
+
     # Extract namespace from root tag if it exists
     namespace = ""
     if "}" in root.tag:
         namespace = root.tag.split("}")[0].strip("{")
-    
+
     # Define namespace dictionary for finding elements
     ns = {"ncx": namespace} if namespace else {}
-    
+
     chapters = []
-    
+
     # Find all navPoint elements (chapters) at any level
     nav_points_xpath = ".//ncx:navPoint" if ns else ".//navPoint"
     for nav_point in root.findall(nav_points_xpath, ns):
         # Get chapter title
         if ns:
             nav_label = nav_point.find(".//ncx:navLabel", ns)
-            title_elem = nav_label.find("ncx:text", ns) if nav_label is not None else None
+            title_elem = (
+                nav_label.find("ncx:text", ns) if nav_label is not None else None
+            )
         else:
             nav_label = nav_point.find(".//navLabel")
             title_elem = nav_label.find("text") if nav_label is not None else None
-            
+
         title = title_elem.text if title_elem is not None else "Unknown Title"
-        
+
         # Get chapter source file
         if ns:
-            content_elem = nav_point.find("./ncx:content", ns) or nav_point.find(".//ncx:content", ns)
+            content_elem = nav_point.find("./ncx:content", ns) or nav_point.find(
+                ".//ncx:content", ns
+            )
         else:
             content_elem = nav_point.find("./content") or nav_point.find(".//content")
-            
+
         if content_elem is not None:
             src = content_elem.get("src")
             chapters.append({"title": title, "src": src})
@@ -103,7 +107,7 @@ def find_all_html_files(epub_extract_dir):
             # Get the relative path from the extract dir
             rel_path = path.relative_to(epub_extract_dir).as_posix()
             all_html_files.append(str(rel_path))
-    
+
     return all_html_files
 
 
@@ -207,7 +211,7 @@ def translate_toc_entries(chapters, source_language, target_language, client):
         batch = chapters[i : i + batch_size]
 
         titles = [chapter["title"] for chapter in batch]
-        titles_str = "\n".join([f"{j+1}. {title}" for j, title in enumerate(titles)])
+        titles_str = "\n".join([f"{j + 1}. {title}" for j, title in enumerate(titles)])
 
         prompt = f"""
         Translate the following chapter titles from {source_language} to {target_language}.
@@ -260,17 +264,17 @@ def update_toc_ncx(toc_path, translated_chapters):
     namespace = ""
     if "}" in root.tag:
         namespace = root.tag.split("}")[0] + "}"
-    
+
     # Define namespace dictionary for finding elements
     ns = {"ncx": namespace.strip("{}")} if namespace else {}
-    
+
     # Update each navPoint with the translated title
     nav_points_xpath = ".//ncx:navPoint" if ns else ".//navPoint"
     for nav_point in root.findall(nav_points_xpath, ns):
         # Get content element to find src
         content_elem_xpath = "./ncx:content" if ns else "./content"
         content_elem = nav_point.find(content_elem_xpath, ns)
-        
+
         if content_elem is not None:
             src = content_elem.get("src")
 
@@ -416,27 +420,34 @@ def translate_epub(input_epub_path, source_language, target_language, config):
 
     # Find all HTML files
     all_html_files = find_all_html_files(epub_extract_dir)
-    
+
     # Remove chapter files from all_html_files to avoid duplication
     chapter_files = set(Path(chapter["src"]).name for chapter in chapters)
-    non_chapter_html_files = [html_file for html_file in all_html_files 
-                              if Path(html_file).name not in chapter_files]
-    
-    print(f"Found {len(chapters)} chapters in TOC and {len(non_chapter_html_files)} additional HTML files")
+    non_chapter_html_files = [
+        html_file
+        for html_file in all_html_files
+        if Path(html_file).name not in chapter_files
+    ]
+
+    print(
+        f"Found {len(chapters)} chapters in TOC and {len(non_chapter_html_files)} additional HTML files"
+    )
 
     # Initialize translated_html_files in progress if not already done
     if "translated_html_files" not in progress:
         progress["translated_html_files"] = []
-    
+
     # Add any previously untracked HTML files to progress
     tracked_html_files = set(item["src"] for item in progress["translated_html_files"])
     for html_file in non_chapter_html_files:
         if html_file not in tracked_html_files:
-            progress["translated_html_files"].append({
-                "src": html_file,
-                "translated": False,
-                "title": f"Additional content: {Path(html_file).name}"
-            })
+            progress["translated_html_files"].append(
+                {
+                    "src": html_file,
+                    "translated": False,
+                    "title": f"Additional content: {Path(html_file).name}",
+                }
+            )
     save_translation_progress(progress_file, progress)
 
     # Copy all files to the translated directory first (if not already done)
@@ -478,7 +489,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
     for i, chapter in enumerate(translated_chapters[start_index:], start=start_index):
         if progress["translated_chapters"][i].get("translated", False):
             print(
-                f"Skipping already translated chapter {i+1}/{len(translated_chapters)}: {chapter['title']}"
+                f"Skipping already translated chapter {i + 1}/{len(translated_chapters)}: {chapter['title']}"
             )
             continue
 
@@ -492,7 +503,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
 
         if chapter_path:
             print(
-                f"Translating chapter {i+1}/{len(translated_chapters)}: {chapter['original_title']} → {chapter['title']}"
+                f"Translating chapter {i + 1}/{len(translated_chapters)}: {chapter['original_title']} → {chapter['title']}"
             )
 
             # Read the HTML content
@@ -527,25 +538,27 @@ def translate_epub(input_epub_path, source_language, target_language, config):
 
     # Now translate additional HTML files
     start_html_index = progress["last_processed_html_index"] + 1
-    
-    for i, html_file_info in enumerate(progress["translated_html_files"][start_html_index:], start=start_html_index):
+
+    for i, html_file_info in enumerate(
+        progress["translated_html_files"][start_html_index:], start=start_html_index
+    ):
         if html_file_info.get("translated", False):
             print(
-                f"Skipping already translated HTML file {i+1}/{len(progress['translated_html_files'])}: {html_file_info['src']}"
+                f"Skipping already translated HTML file {i + 1}/{len(progress['translated_html_files'])}: {html_file_info['src']}"
             )
             continue
-            
+
         html_path = Path(epub_translated_dir) / html_file_info["src"]
-        
+
         if html_path.exists():
             print(
-                f"Translating additional HTML file {i+1}/{len(progress['translated_html_files'])}: {html_file_info['src']}"
+                f"Translating additional HTML file {i + 1}/{len(progress['translated_html_files'])}: {html_file_info['src']}"
             )
-            
+
             # Read the HTML content
             with open(html_path, "r", encoding="utf-8") as f:
                 html_content = f.read()
-                
+
             # Translate the HTML content
             translated_html = translate_html_content(
                 html_content,
@@ -556,17 +569,17 @@ def translate_epub(input_epub_path, source_language, target_language, config):
                 client,
                 previous_content,
             )
-            
+
             # Save the translated HTML
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(translated_html)
-                
+
             # Store for context in next translation
             if len(translated_html) > 5000:
                 previous_content = translated_html[:5000]
             else:
                 previous_content = translated_html
-                
+
             # Update progress
             progress["translated_html_files"][i]["translated"] = True
             progress["last_processed_html_index"] = i

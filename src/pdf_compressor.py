@@ -55,7 +55,7 @@ def compress_pdf(input_path, output_path, dpi=150, quality=60, grayscale=False):
 
             # Process each page
             for page_num, page in enumerate(pdf_document):
-                sys.stdout.write(f"\rConverting page {page_num+1}/{page_count}")
+                sys.stdout.write(f"\rConverting page {page_num + 1}/{page_count}")
                 sys.stdout.flush()
 
                 # Get page dimensions
@@ -72,7 +72,7 @@ def compress_pdf(input_path, output_path, dpi=150, quality=60, grayscale=False):
                     img = img.convert("L")
 
                 # Save as JPEG with specified quality
-                img_path = temp_dir_path / f"page_{page_num+1}.jpg"
+                img_path = temp_dir_path / f"page_{page_num + 1}.jpg"
                 img.save(img_path, "JPEG", quality=quality, optimize=True)
 
                 # Add image back to new PDF
