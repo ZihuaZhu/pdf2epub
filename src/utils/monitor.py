@@ -4,7 +4,7 @@ import argparse
 from botocore.exceptions import NoCredentialsError, ClientError
 import sys
 import time
-from src.utils.logging_config import configure_logging
+from utils.logging_config import configure_logging
 from loguru import logger
 
 # Configure logger (will be updated with verbose flag in main)

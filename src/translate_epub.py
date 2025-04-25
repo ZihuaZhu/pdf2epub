@@ -13,11 +13,11 @@ from google.genai.types import (
     HarmCategory,
     SafetySetting,
 )
-from src.utils.network_utils import generate_content_with_retry, get_default_generation_config
+from utils.network_utils import generate_content_with_retry, get_default_generation_config
 import xml.etree.ElementTree as ET
 import argparse
 from loguru import logger
-from src.utils.logging_config import configure_logging
+from utils.logging_config import configure_logging
 
 # Configure logger
 logger = configure_logging()
@@ -32,7 +32,7 @@ def load_config():
 
 def setup_genai_api(api_key):
     """Setup Google Generative AI API with the provided key."""
-    from src.utils.network_utils import setup_genai_client
+    from utils.network_utils import setup_genai_client
     return setup_genai_client(api_key)
 
 
@@ -212,7 +212,6 @@ def translate_html_content(
     7. Make sure the translation is accurate and natural-sounding in {target_language}
     8. For names of people, places, or titles that have standard translations in {target_language},
        use those standard translations
-    9. Never modify doctype declarations, <meta> tags, <link> tags or other structural HTML
     
     {context}HTML content to translate:
     

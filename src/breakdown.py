@@ -10,11 +10,11 @@ from google.genai.types import (
     Part,
     SafetySetting
 )
-from src.utils.network_utils import generate_content_with_retry, get_default_generation_config
+from utils.network_utils import generate_content_with_retry, get_default_generation_config
 from pdf_compressor import compress_pdf
 import argparse
 from loguru import logger
-from src.utils.logging_config import configure_logging
+from utils.logging_config import configure_logging
 
 # Configure logger
 logger = configure_logging()
@@ -29,7 +29,7 @@ def load_config(config_path="config.yaml"):
 
 def setup_genai_api(api_key):
     """Setup Google Generative AI API with the provided key."""
-    from src.utils.network_utils import setup_genai_client
+    from utils.network_utils import setup_genai_client
     return setup_genai_client(api_key)
 
 

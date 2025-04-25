@@ -14,7 +14,7 @@ from pathlib import Path
 from PIL import Image
 from google import genai
 import httpx
-from src.utils.network_utils import generate_content_with_retry, get_default_generation_config
+from utils.network_utils import generate_content_with_retry, get_default_generation_config
 from google.genai.types import (
     GenerateContentConfig,
     HarmBlockThreshold,
@@ -23,7 +23,7 @@ from google.genai.types import (
     SafetySetting,
 )
 from loguru import logger
-from src.utils.logging_config import configure_logging
+from utils.logging_config import configure_logging
 
 # Configure logger
 logger = configure_logging()
@@ -38,7 +38,7 @@ def load_config():
 
 def setup_genai_api(api_key):
     """Setup Google Generative AI API with the provided key."""
-    from src.utils.network_utils import setup_genai_client
+    from utils.network_utils import setup_genai_client
     return setup_genai_client(api_key)
 
 
