@@ -26,13 +26,13 @@ jobs:
     - name: Copy input.epub and config.yaml
       run: |
         echo "${{ secrets.CONFIG }}" > config.yaml
-        # Extract values from config.yaml
-        TITLE=$(grep "^title:" config.yaml | cut -d ":" -f2- | xargs)
-        S3_ACCESS_KEY=$(grep "^s3_access_key_id:" config.yaml | cut -d ":" -f2- | xargs)
-        S3_SECRET_KEY=$(grep "^s3_secret_access_key:" config.yaml | cut -d ":" -f2- | xargs)
-        S3_ENDPOINT=$(grep "^s3_endpoint:" config.yaml | cut -d ":" -f2- | xargs)
-        S3_BUCKET_NAME=$(grep "^s3_bucket_name:" config.yaml | cut -d ":" -f2- | xargs)
-        GOOGLE_API_KEY=$(grep "^google_api_key:" config.yaml | cut -d ":" -f2- | xargs)
+        # Extract values from config.yaml using Python parser
+        TITLE=$(python src/utils/config_parser.py config.yaml title)
+        S3_ACCESS_KEY=$(python src/utils/config_parser.py config.yaml s3_access_key_id)
+        S3_SECRET_KEY=$(python src/utils/config_parser.py config.yaml s3_secret_access_key)
+        S3_ENDPOINT=$(python src/utils/config_parser.py config.yaml s3_endpoint)
+        S3_BUCKET_NAME=$(python src/utils/config_parser.py config.yaml s3_bucket_name)
+        GOOGLE_API_KEY=$(python src/utils/config_parser.py config.yaml google_api_key)
         
         # Add dynamic masking for sensitive values
         echo "::add-mask::$S3_ACCESS_KEY"
@@ -47,12 +47,12 @@ jobs:
 
     - name: Translate EPUB
       run: |
-        # Extract values from config.yaml
-        TITLE=$(grep "^title:" config.yaml | cut -d ":" -f2- | xargs)
-        S3_ACCESS_KEY=$(grep "^s3_access_key_id:" config.yaml | cut -d ":" -f2- | xargs)
-        S3_SECRET_KEY=$(grep "^s3_secret_access_key:" config.yaml | cut -d ":" -f2- | xargs)
-        S3_ENDPOINT=$(grep "^s3_endpoint:" config.yaml | cut -d ":" -f2- | xargs)
-        S3_BUCKET_NAME=$(grep "^s3_bucket_name:" config.yaml | cut -d ":" -f2- | xargs)
+        # Extract values from config.yaml using Python parser
+        TITLE=$(python src/utils/config_parser.py config.yaml title)
+        S3_ACCESS_KEY=$(python src/utils/config_parser.py config.yaml s3_access_key_id)
+        S3_SECRET_KEY=$(python src/utils/config_parser.py config.yaml s3_secret_access_key)
+        S3_ENDPOINT=$(python src/utils/config_parser.py config.yaml s3_endpoint)
+        S3_BUCKET_NAME=$(python src/utils/config_parser.py config.yaml s3_bucket_name)
         
         # Add dynamic masking for sensitive values
         echo "::add-mask::$S3_ACCESS_KEY"

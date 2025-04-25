@@ -11,3 +11,4 @@ s3_bucket_name: example_bucket_name
 s3_endpoint: https://example.com
 num_retries: 3
 max_backoff_seconds: 30
+previous_content_limit: 0

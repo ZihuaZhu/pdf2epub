@@ -1,4 +1,4 @@
-# PDF2EPUB User Guide
+# PDF2EPUB User Guide | [中文](README.md)
 
 PDF2EPUB is a powerful tool that converts PDF books to EPUB format and can translate EPUB books from one language to another. The tool leverages Google's Gemini API for PDF parsing and translation, and uses S3-compatible storage for file saving and synchronization.
 
@@ -70,8 +70,9 @@ s3_access_key_id: Your S3 access key ID
 s3_secret_access_key: Your S3 secret access key
 s3_bucket_name: Your S3 bucket name
 s3_endpoint: Your S3 endpoint URL
-num_retries: 3
-max_backoff_seconds: 30
+num_retries: 3  # Number of retries when API calls fail
+max_backoff_seconds: 30  # Maximum backoff time in seconds between retries
+previous_content_limit: 0  # Number of characters to use as context for translation (0 means no context, can reduce token consumption)
 ```
 
 ## Local Usage

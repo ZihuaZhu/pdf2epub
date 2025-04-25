@@ -183,9 +183,12 @@ def translate_html_content(
     previous_content=None,
 ):
     """Translate HTML content using Gemini API."""
+    # Get previous_content_limit from config
+    previous_content_limit = config.get("previous_content_limit", 0)
+    
     context = ""
-    if previous_content:
-        context = f"Previous chapter content (for context only, do not translate this again):\n{previous_content[:2000]}\n\n"
+    if previous_content and previous_content_limit > 0:
+        context = f"Previous chapter content (for context only, do not translate this again):\n{previous_content[:previous_content_limit]}\n\n"
 
     prompt = f"""
     Translate the following HTML content from {source_language} to {target_language}.
@@ -636,11 +639,12 @@ def translate_epub(input_epub_path, source_language, target_language, config):
             with open(chapter_path, "w", encoding="utf-8") as f:
                 f.write(translated_html)
 
-            # Store for context in next translation (use a summary or first part to save tokens)
-            if len(translated_html) > 5000:
-                previous_content = translated_html[:5000]
+            # Store for context in next translation based on config limit
+            previous_content_limit = config.get("previous_content_limit", 0)
+            if previous_content_limit > 0:
+                previous_content = translated_html[:previous_content_limit]
             else:
-                previous_content = translated_html
+                previous_content = None
 
             # Update progress
             progress["translated_chapters"][i]["translated"] = True
@@ -686,11 +690,12 @@ def translate_epub(input_epub_path, source_language, target_language, config):
             with open(html_path, "w", encoding="utf-8") as f:
                 f.write(translated_html)
 
-            # Store for context in next translation
-            if len(translated_html) > 5000:
-                previous_content = translated_html[:5000]
+            # Store for context in next translation based on config limit
+            previous_content_limit = config.get("previous_content_limit", 0)
+            if previous_content_limit > 0:
+                previous_content = translated_html[:previous_content_limit]
             else:
-                previous_content = translated_html
+                previous_content = None
 
             # Update progress
             progress["translated_html_files"][i]["translated"] = True
