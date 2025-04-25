@@ -73,6 +73,7 @@ s3_endpoint: Your S3 endpoint URL
 num_retries: 3  # Number of retries when API calls fail
 max_backoff_seconds: 30  # Maximum backoff time in seconds between retries
 previous_content_limit: 0  # Number of characters to use as context for translation (0 means no context, can reduce token consumption)
+max_continuation_attempts: 3  # Maximum number of continuation attempts for incomplete HTML responses
 ```
 
 ## Local Usage

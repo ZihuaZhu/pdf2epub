@@ -7,6 +7,7 @@ import hashlib
 import json
 from pathlib import Path
 from google import genai
+from utils.html_utils import clean_html_response
 from google.genai.types import (
     GenerateContentConfig,
     HarmBlockThreshold,
@@ -40,71 +41,6 @@ def setup_genai_api(api_key):
 def ensure_directory(directory_path):
     """Ensure a directory exists, create it if it doesn't."""
     Path(directory_path).mkdir(parents=True, exist_ok=True)
-
-
-def clean_html_response(html_content):
-    """Clean the HTML response from Gemini."""
-    if html_content is None:
-        return None
-    
-    try:
-        # First try to parse as JSON in case response was JSON-encoded
-        try:
-            parsed = json.loads(html_content)
-            if isinstance(parsed, str):
-                html_content = parsed
-            elif isinstance(parsed, dict) and "html" in parsed:
-                html_content = parsed["html"]
-        except json.JSONDecodeError:
-            pass  # Not JSON, proceed with normal cleaning
-            
-        # Clean up markdown code blocks
-        html_content = re.sub(r"```html\s*", "", html_content)
-        html_content = re.sub(r"```\s*$", "", html_content)
-        html_content = re.sub(r"```[a-zA-Z]*\s*", "", html_content)
-        
-        # Extract HTML content
-        # Try to match full HTML document first
-        html_match = re.search(
-            r"(?:<\!DOCTYPE.*?>)?(?:<html.*?>).*?<\/html>", html_content, re.DOTALL
-        )
-        
-        # If no match, try to match just the body content
-        if not html_match:
-            html_match = re.search(
-                r"(?:<body.*?>).*?<\/body>", html_content, re.DOTALL
-            )
-            
-        # If still no match, try to match any HTML-like content between div tags
-        if not html_match:
-            html_match = re.search(
-                r"<div.*?>.*?<\/div>", html_content, re.DOTALL
-            )
-            
-        if not html_match:
-            # If we can't find valid HTML, log the raw response for debugging
-            logger.error("Failed to find valid HTML structure in response")
-            logger.debug("Response content structure:")
-            logger.debug("-" * 40)
-            logger.debug(f"Content starts with: {html_content[:200]}")
-            logger.debug("..." if len(html_content) > 200 else "(end)")
-            logger.debug("-" * 40)
-            raise ValueError("Could not find valid HTML content in response")
-            
-        if html_match:
-            html_content = html_match.group(0)
-            
-        # Final cleanup
-        html_content = html_content.strip()
-        if not html_content:
-            raise ValueError("Cleaned HTML content is empty")
-            
-        return html_content
-        
-    except Exception as e:
-        logger.error(f"Error cleaning HTML response: {str(e)}")
-        logger.debug(f"Original content: {html_content[:500]}...")  # Log first 500 chars for debugging
-        raise ValueError("Failed to clean HTML response") from e
 
 
 def extract_epub(epub_path, extract_dir):
@@ -182,10 +118,41 @@ def translate_html_content(
     client,
     config,
     previous_content=None,
+    partial_html=None,
+    continuation_attempts=0,
 ):
-    """Translate HTML content using Gemini API."""
+    """
+    Translate HTML content using Gemini API.
+    
+    Args:
+        html_content: The HTML content to translate
+        chapter_title: The title of the chapter
+        book_title: The title of the book
+        source_language: The source language
+        target_language: The target language
+        client: The Gemini API client
+        config: The configuration dictionary
+        previous_content: Previous chapter content for context (optional)
+        partial_html: Partial HTML from a previous attempt (optional)
+        continuation_attempts: Number of continuation attempts made so far (optional)
+        
+    Returns:
+        str: The translated HTML content
+    """
     # Get previous_content_limit from config
     previous_content_limit = config.get("previous_content_limit", 0)
+    
+    # Get max continuation attempts from config with default of 3
+    max_continuation_attempts = config.get("max_continuation_attempts", 3)
+    
+    # Check if we've exceeded the maximum continuation attempts
+    if continuation_attempts > max_continuation_attempts:
+        logger.error(f"Exceeded maximum continuation attempts ({max_continuation_attempts}) for {chapter_title}")
+        raise ValueError(f"Failed to complete HTML translation after {max_continuation_attempts} continuation attempts")
+    
+    # If we're continuing from a partial response, log it
+    if partial_html:
+        logger.info(f"Continuing translation from partial HTML (attempt {continuation_attempts})")
     
     context = ""
     if previous_content and previous_content_limit > 0:
@@ -214,6 +181,20 @@ def translate_html_content(
     7. Make sure the translation is accurate and natural-sounding in {target_language}
     8. For names of people, places, or titles that have standard translations in {target_language},
        use those standard translations
+    """
+    
+    # Add continuation instructions if this is a continuation attempt
+    if partial_html:
+        prompt += f"""
+    
+    IMPORTANT: This is a CONTINUATION request. I previously received a partial HTML response that was cut off.
+    I'm providing that partial HTML and you need to continue from where it left off.
+    DO NOT restart the translation from the beginning.
+    DO NOT repeat the content I'm providing.
+    ONLY provide the remaining part of the HTML that completes the document.
+    """
+    
+    prompt += f"""
     
     {context}Return only the translated HTML as raw text, without any JSON formatting, markdown code blocks, or other commentary.
     The response should start directly with the HTML content.
@@ -222,7 +203,7 @@ def translate_html_content(
     # Create multipart input with instruction and HTML content
     parts = [
         prompt,
-        html_content
+        Part.from_text(text=html_content)
     ]
 
     # Get model from config with fallback
@@ -234,6 +215,7 @@ def translate_html_content(
     
     # Get generation config with slightly higher temperature for translation
     generation_config = get_default_generation_config(temperature=0.2)
+    generation_config.response_mime_type = "application/xml"
     
     # Generate content with retry using multipart input
     response = generate_content_with_retry(
@@ -243,17 +225,39 @@ def translate_html_content(
         config=generation_config,
         max_retries=num_retries,
         max_backoff=max_backoff,
-        operation_name=f"HTML translation for {chapter_title}",
+        operation_name=f"HTML translation for {chapter_title}" + (f" (continuation {continuation_attempts})" if partial_html else ""),
         use_streaming=True
     )
     
     # Clean and return the translated HTML
-    translated_html = clean_html_response(response.text)
+    # If we have partial HTML from a previous attempt, pass it to clean_html_response
+    result = clean_html_response(
+        response.text, 
+        previous_content=partial_html
+    )
     
-    if translated_html is None:
+    # Check if the result indicates a partial HTML document
+    if isinstance(result, dict) and result.get("status") == "partial":
+        logger.warning(f"Received partial HTML response for {chapter_title}, attempting continuation")
+        
+        # Recursively call this function to continue the translation
+        return translate_html_content(
+            html_content=html_content,  # Original content
+            chapter_title=chapter_title,
+            book_title=book_title,
+            source_language=source_language,
+            target_language=target_language,
+            client=client,
+            config=config,
+            previous_content=previous_content,
+            partial_html=result.get("content"),  # Pass the partial HTML
+            continuation_attempts=continuation_attempts + 1
+        )
+    
+    if result is None:
         raise ValueError(f"Failed to translate HTML content for {chapter_title}")
         
-    return translated_html
+    return result
 
 
 def translate_book_title(book_title, source_language, target_language, client, config):

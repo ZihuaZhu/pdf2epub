@@ -15,6 +15,7 @@ from PIL import Image
 from google import genai
 import httpx
 from utils.network_utils import generate_content_with_retry, get_default_generation_config
+from utils.html_utils import clean_html_response
 from google.genai.types import (
     GenerateContentConfig,
     HarmBlockThreshold,
@@ -24,6 +25,7 @@ from google.genai.types import (
 )
 from loguru import logger
 from utils.logging_config import configure_logging
+
 
 # Configure logger
 logger = configure_logging()
@@ -59,28 +61,6 @@ def get_pdf_page_count(pdf_path):
     """Get the total number of pages in a PDF file."""
     with fitz.open(pdf_path) as pdf:
         return len(pdf)
-
-
-def clean_html_response(html_content):
-    """Clean the HTML response from Gemini to remove code blocks and other content."""
-    if html_content is None:
-        return None
-        
-    # Remove markdown code block markers if present
-    html_content = re.sub(r"```html\s*", "", html_content)
-    html_content = re.sub(r"```\s*$", "", html_content)
-
-    # Remove any other markdown code block markers
-    html_content = re.sub(r"```[a-zA-Z]*\s*", "", html_content)
-
-    # Remove any non-HTML content before or after the actual HTML
-    html_match = re.search(
-        r"(?:<\!DOCTYPE.*?>|<html.*?>).*?<\/html>", html_content, re.DOTALL
-    )
-    if html_match:
-        html_content = html_match.group(0)
-
-    return html_content.strip()
 
 
 def save_generation_progress(progress_file, progress_data):
@@ -433,6 +413,7 @@ def create_toc_html(structure, book_title, output_path, client, pdf_path, config
     
     # Get default generation config
     generation_config = get_default_generation_config(temperature=0.1)
+    generation_config.response_mime_type = "application/xml"
     
     response = generate_content_with_retry(
         client=client,
@@ -641,6 +622,7 @@ def create_chapter_html(
     
     # Get default generation config
     generation_config = get_default_generation_config(temperature=0.1)
+    generation_config.response_mime_type = "application/xml"
     
     response = generate_content_with_retry(
         client=client,

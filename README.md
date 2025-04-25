@@ -73,6 +73,7 @@ s3_endpoint: 你的S3端点URL
 num_retries: 3  # API调用失败时的重试次数
 max_backoff_seconds: 30  # 重试时的最大退避时间（秒）
 previous_content_limit: 0  # 设置翻译时使用的前文上下文字符数（0表示不使用上下文，可减少Token消耗）
+max_continuation_attempts: 3  # HTML响应不完整时的最大继续尝试次数
 ```
 
 ## 本地运行
