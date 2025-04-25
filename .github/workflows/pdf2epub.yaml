@@ -32,6 +32,12 @@ jobs:
         S3_SECRET_KEY=$(grep "^s3_secret_access_key:" config.yaml | cut -d ":" -f2- | xargs)
         S3_ENDPOINT=$(grep "^s3_endpoint:" config.yaml | cut -d ":" -f2- | xargs)
         S3_BUCKET_NAME=$(grep "^s3_bucket_name:" config.yaml | cut -d ":" -f2- | xargs)
+        GOOGLE_API_KEY=$(grep "^google_api_key:" config.yaml | cut -d ":" -f2- | xargs)
+        
+        # Add dynamic masking for sensitive values
+        echo "::add-mask::$S3_ACCESS_KEY"
+        echo "::add-mask::$S3_SECRET_KEY"
+        echo "::add-mask::$GOOGLE_API_KEY"
         
         # Add src to PYTHONPATH
         export PYTHONPATH=$PYTHONPATH:$(pwd)
@@ -47,6 +53,10 @@ jobs:
         S3_SECRET_KEY=$(grep "^s3_secret_access_key:" config.yaml | cut -d ":" -f2- | xargs)
         S3_ENDPOINT=$(grep "^s3_endpoint:" config.yaml | cut -d ":" -f2- | xargs)
         S3_BUCKET_NAME=$(grep "^s3_bucket_name:" config.yaml | cut -d ":" -f2- | xargs)
+        
+        # Add dynamic masking for sensitive values
+        echo "::add-mask::$S3_ACCESS_KEY"
+        echo "::add-mask::$S3_SECRET_KEY"
         
         # Add src to PYTHONPATH
         export PYTHONPATH=$PYTHONPATH:$(pwd)
@@ -73,6 +83,10 @@ jobs:
         S3_SECRET_KEY=$(grep "^s3_secret_access_key:" config.yaml | cut -d ":" -f2- | xargs)
         S3_ENDPOINT=$(grep "^s3_endpoint:" config.yaml | cut -d ":" -f2- | xargs)
         S3_BUCKET_NAME=$(grep "^s3_bucket_name:" config.yaml | cut -d ":" -f2- | xargs)
+        
+        # Add dynamic masking for sensitive values
+        echo "::add-mask::$S3_ACCESS_KEY"
+        echo "::add-mask::$S3_SECRET_KEY"
         
         # Add src to PYTHONPATH
         export PYTHONPATH=$PYTHONPATH:$(pwd)
