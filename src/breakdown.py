@@ -178,33 +178,51 @@ def analyze_pdf_structure(client: genai.Client, pdf_path, book_title, config):
     # Get model from config with fallback
     model = config.get("model", "gemini-2.5-pro-preview-03-25")
     
-    # Generate content with structured response
-    response = client.models.generate_content(
-        model=model,
-        contents=parts,
-        config=GenerateContentConfig(
-            temperature=0.1,
-            response_mime_type="application/json",
-            safety_settings=[
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-            ],
-        )
-    )
+    # Get number of retries from config
+    num_retries = config.get("num_retries", 3)
+    retry_count = 0
+    response = None
+    
+    while response is None and retry_count < num_retries:
+        if retry_count > 0:
+            print(f"Retry attempt {retry_count} for PDF structure analysis...")
+            
+        try:
+            # Generate content with structured response
+            response = client.models.generate_content(
+                model=model,
+                contents=parts,
+                config=GenerateContentConfig(
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                    safety_settings=[
+                        SafetySetting(
+                            category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                            threshold=HarmBlockThreshold.BLOCK_NONE,
+                        ),
+                        SafetySetting(
+                            category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                            threshold=HarmBlockThreshold.BLOCK_NONE,
+                        ),
+                        SafetySetting(
+                            category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                            threshold=HarmBlockThreshold.BLOCK_NONE,
+                        ),
+                        SafetySetting(
+                            category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                            threshold=HarmBlockThreshold.BLOCK_NONE,
+                        ),
+                    ],
+                )
+            )
+        except Exception as e:
+            print(f"API call failed: {e}")
+            response = None
+        
+        retry_count += 1
+    
+    if response is None:
+        raise ValueError(f"Failed to analyze PDF structure after {num_retries} attempts")
     
     print(response)
 
@@ -223,11 +241,17 @@ def main():
     config = load_config(args.config)
     api_key = config.get("google_api_key")
     
-    # Get input PDF path and extract book title from path
+    # Get input PDF path
     input_pdf = Path(args.input)
-    book_title = input_pdf.stem  # Extract filename without extension
     
-    # Define output directory based on book title
+    # Get book title from config instead of PDF filename
+    book_title = config.get("title")
+    if not book_title:
+        # Fallback to PDF filename if title not in config
+        book_title = input_pdf.stem
+        print(f"Warning: No title found in config, using PDF filename: {book_title}")
+    
+    # Define output directory based on config title
     output_dir = Path("output") / Path(book_title)
     output_dir.mkdir(parents=True, exist_ok=True)
 

@@ -1038,6 +1038,12 @@ def main():
     # Check if API key exists
     if not api_key:
         raise ValueError("Google API key not found in config.yaml")
+        
+    # Check if title exists
+    if not book_title:
+        # Fallback to PDF filename if title not in config
+        book_title = Path(args.input).stem
+        print(f"Warning: No title found in config, using PDF filename: {book_title}")
 
     # Setup Gemini API
     client = setup_genai_api(api_key)

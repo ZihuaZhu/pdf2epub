@@ -354,7 +354,14 @@ def load_translation_progress(progress_file):
 def translate_epub(input_epub_path, source_language, target_language, config):
     """Main function to translate an EPUB file."""
     # Setup paths and directories
-    original_book_title = Path(input_epub_path).stem
+    input_file_name = Path(input_epub_path).stem
+    
+    # Get book title from config instead of input filename
+    original_book_title = config.get("title")
+    if not original_book_title:
+        # Fallback to input filename if title not in config
+        original_book_title = input_file_name
+        print(f"Warning: No title found in config, using input filename: {original_book_title}")
 
     # Setup API
     api_key = config.get("google_api_key")
