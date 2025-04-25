@@ -45,16 +45,65 @@ def clean_html_response(html_content):
     """Clean the HTML response from Gemini."""
     if html_content is None:
         return None
+    
+    try:
+        # First try to parse as JSON in case response was JSON-encoded
+        try:
+            parsed = json.loads(html_content)
+            if isinstance(parsed, str):
+                html_content = parsed
+            elif isinstance(parsed, dict) and "html" in parsed:
+                html_content = parsed["html"]
+        except json.JSONDecodeError:
+            pass  # Not JSON, proceed with normal cleaning
+            
+        # Clean up markdown code blocks
+        html_content = re.sub(r"```html\s*", "", html_content)
+        html_content = re.sub(r"```\s*$", "", html_content)
+        html_content = re.sub(r"```[a-zA-Z]*\s*", "", html_content)
         
-    html_content = re.sub(r"```html\s*", "", html_content)
-    html_content = re.sub(r"```\s*$", "", html_content)
-    html_content = re.sub(r"```[a-zA-Z]*\s*", "", html_content)
-    html_match = re.search(
-        r"(?:<\!DOCTYPE.*?>|<html.*?>).*?<\/html>", html_content, re.DOTALL
-    )
-    if html_match:
-        html_content = html_match.group(0)
-    return html_content.strip()
+        # Extract HTML content
+        # Try to match full HTML document first
+        html_match = re.search(
+            r"(?:<\!DOCTYPE.*?>)?(?:<html.*?>).*?<\/html>", html_content, re.DOTALL
+        )
+        
+        # If no match, try to match just the body content
+        if not html_match:
+            html_match = re.search(
+                r"(?:<body.*?>).*?<\/body>", html_content, re.DOTALL
+            )
+            
+        # If still no match, try to match any HTML-like content between div tags
+        if not html_match:
+            html_match = re.search(
+                r"<div.*?>.*?<\/div>", html_content, re.DOTALL
+            )
+            
+        if not html_match:
+            # If we can't find valid HTML, log the raw response for debugging
+            logger.error("Failed to find valid HTML structure in response")
+            logger.debug("Response content structure:")
+            logger.debug("-" * 40)
+            logger.debug(f"Content starts with: {html_content[:200]}")
+            logger.debug("..." if len(html_content) > 200 else "(end)")
+            logger.debug("-" * 40)
+            raise ValueError("Could not find valid HTML content in response")
+            
+        if html_match:
+            html_content = html_match.group(0)
+            
+        # Final cleanup
+        html_content = html_content.strip()
+        if not html_content:
+            raise ValueError("Cleaned HTML content is empty")
+            
+        return html_content
+        
+    except Exception as e:
+        logger.error(f"Error cleaning HTML response: {str(e)}")
+        logger.debug(f"Original content: {html_content[:500]}...")  # Log first 500 chars for debugging
+        raise ValueError("Failed to clean HTML response") from e
 
 
 def extract_epub(epub_path, extract_dir):
@@ -144,22 +193,30 @@ def translate_html_content(
     Book title: {book_title}
     Chapter title: {chapter_title}
     
-    IMPORTANT INSTRUCTIONS:
-    1. Preserve all HTML tags, attributes, and structure exactly as they are.
-    2. Only translate the text content inside tags, not the tags themselves.
-    3. Preserve all class names, IDs, and other attributes.
-    4. Keep all image references and links intact.
-    5. Maintain the same formatting and structure.
-    6. Translate all visible text, including image alt attributes, but don't change any code.
-    7. Make sure the translation is accurate and natural-sounding in {target_language}.
-    8. For names of people, places, or titles that have standard translations in {target_language}, 
-       use those standard translations.
+    STRICT RESPONSE FORMAT REQUIREMENTS:
+    - Your response must begin directly with <!DOCTYPE html> or <html> tag
+    - Return only raw HTML text, not formatted as JSON or markdown
+    - Do not include any explanations or commentary before or after the HTML
+    - Do not wrap the HTML in code blocks or quotes
+    
+    TRANSLATION REQUIREMENTS:
+    1. Preserve all HTML tags, attributes, and structure exactly as they are
+    2. Only translate the text content inside tags, not the tags themselves
+    3. Preserve all class names, IDs, and other attributes
+    4. Keep all image references and links intact
+    5. Maintain the same formatting and structure 
+    6. Translate all visible text, including image alt attributes, but don't change any code
+    7. Make sure the translation is accurate and natural-sounding in {target_language}
+    8. For names of people, places, or titles that have standard translations in {target_language},
+       use those standard translations
+    9. Never modify doctype declarations, <meta> tags, <link> tags or other structural HTML
     
     {context}HTML content to translate:
     
     {html_content}
     
-    Return only the translated HTML without any other commentary.
+    Return only the translated HTML as raw text, without any JSON formatting, markdown code blocks, or other commentary.
+    The response should start directly with the HTML content.
     """
 
     # Get model from config with fallback

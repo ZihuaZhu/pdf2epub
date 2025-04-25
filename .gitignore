@@ -1,7 +1,7 @@
 /output/
 /.vscode/
 *.pdf
-/config.yaml
+/config*.yaml
 *.epub
 *.env
 *__pycache__/
