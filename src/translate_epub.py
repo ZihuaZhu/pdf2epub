@@ -180,7 +180,8 @@ def translate_html_content(
         config=generation_config,
         max_retries=num_retries,
         max_backoff=max_backoff,
-        operation_name=f"HTML translation for {chapter_title}"
+        operation_name=f"HTML translation for {chapter_title}",
+        use_streaming=True
     )
     
     # Clean and return the translated HTML
@@ -219,7 +220,8 @@ def translate_book_title(book_title, source_language, target_language, client, c
         config=generation_config,
         max_retries=num_retries,
         max_backoff=max_backoff,
-        operation_name="Book title translation"
+        operation_name="Book title translation",
+        use_streaming=True
     )
 
     return response.text.strip()
@@ -262,7 +264,8 @@ def translate_toc_entries(chapters, source_language, target_language, client, co
             config=generation_config,
             max_retries=num_retries,
             max_backoff=max_backoff,
-            operation_name=f"TOC entries translation (batch {i // batch_size + 1})"
+            operation_name=f"TOC entries translation (batch {i // batch_size + 1})",
+            use_streaming=True
         )
 
         translated_titles = response.text.strip().split("\n")

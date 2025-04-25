@@ -441,7 +441,8 @@ def create_toc_html(structure, book_title, output_path, client, pdf_path, config
         config=generation_config,
         max_retries=num_retries,
         max_backoff=max_backoff,
-        operation_name="TOC HTML generation"
+        operation_name="TOC HTML generation",
+        use_streaming=True
     )
     
     # Clean the HTML response
@@ -648,7 +649,8 @@ def create_chapter_html(
         config=generation_config,
         max_retries=num_retries,
         max_backoff=max_backoff,
-        operation_name=f"Chapter {chapter_index} HTML generation"
+        operation_name=f"Chapter {chapter_index} HTML generation",
+        use_streaming=True
     )
     
     # Clean the HTML response

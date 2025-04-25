@@ -132,9 +132,10 @@ def retry_with_exponential_backoff(max_retries=3, max_backoff=30):
     return decorator
 
 
-def generate_content_with_retry(client, model, contents, config=None, max_retries=3, max_backoff=30, operation_name="API call"):
+def generate_content_with_retry(client, model, contents, config=None, max_retries=3, max_backoff=30, operation_name="API call", use_streaming=True):
     """
     Helper function to generate content with retry logic for network-related exceptions.
+    Supports both streaming and non-streaming modes.
     
     Args:
         client: The Gemini API client
@@ -144,9 +145,11 @@ def generate_content_with_retry(client, model, contents, config=None, max_retrie
         max_retries: Maximum number of retry attempts
         max_backoff: Maximum backoff time in seconds
         operation_name: Name of the operation for logging purposes
+        use_streaming: Whether to use streaming mode (default: True)
         
     Returns:
-        The generated content response
+        In non-streaming mode: The complete generated content response
+        In streaming mode: A response object with aggregated text from the stream
     """
     retry_count = 0
     response = None
@@ -163,12 +166,43 @@ def generate_content_with_retry(client, model, contents, config=None, max_retrie
                 logger.warning(f"Retry attempt {retry_count} for {operation_name}. Waiting {backoff_time:.2f}s...")
                 time.sleep(backoff_time)
             
-            # Generate content
-            response = client.models.generate_content(
-                model=model,
-                contents=contents,
-                config=config,
-            )
+            if use_streaming:
+                # Use streaming mode
+                logger.info(f"Using streaming mode for {operation_name}")
+                
+                # Create a response-like object to store the aggregated content
+                class AggregatedResponse:
+                    def __init__(self):
+                        self.text = ""
+                        self.parts = []
+                
+                aggregated_response = AggregatedResponse()
+                
+                # Generate content with streaming
+                stream_response = client.models.generate_content_stream(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
+                
+                # Process the stream
+                for chunk in stream_response:
+                    if chunk.text:
+                        aggregated_response.text += chunk.text
+                        # Log progress periodically (every 500 chars)
+                        if len(aggregated_response.text) % 500 < 10:
+                            logger.debug(f"Streaming progress for {operation_name}: {len(aggregated_response.text)} chars received")
+                
+                response = aggregated_response
+                logger.info(f"Streaming complete for {operation_name}: {len(response.text)} total chars")
+            else:
+                # Use non-streaming mode (original behavior)
+                logger.info(f"Using non-streaming mode for {operation_name}")
+                response = client.models.generate_content(
+                    model=model,
+                    contents=contents,
+                    config=config,
+                )
             
         except httpx.RemoteProtocolError as e:
             logger.error(f"RemoteProtocolError during {operation_name}: {e}")
@@ -203,3 +237,31 @@ def generate_content_with_retry(client, model, contents, config=None, max_retrie
         raise ValueError(f"Failed to execute {operation_name} after {max_retries} attempts")
         
     return response
+
+
+def generate_content_with_retry_non_streaming(client, model, contents, config=None, max_retries=3, max_backoff=30, operation_name="API call"):
+    """
+    Legacy non-streaming version of generate_content_with_retry for backward compatibility.
+    
+    Args:
+        client: The Gemini API client
+        model: The model to use for generation
+        contents: The contents to generate from
+        config: The generation config (if None, uses default config)
+        max_retries: Maximum number of retry attempts
+        max_backoff: Maximum backoff time in seconds
+        operation_name: Name of the operation for logging purposes
+        
+    Returns:
+        The generated content response
+    """
+    return generate_content_with_retry(
+        client=client,
+        model=model,
+        contents=contents,
+        config=config,
+        max_retries=max_retries,
+        max_backoff=max_backoff,
+        operation_name=operation_name,
+        use_streaming=False
+    )

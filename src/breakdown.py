@@ -213,7 +213,7 @@ def analyze_pdf_structure(client: genai.Client, pdf_path, book_title, config):
         ],
     )
     
-    # Generate content with retry
+    # Generate content with retry (using streaming for better performance)
     response = generate_content_with_retry(
         client=client,
         model=model,
@@ -221,7 +221,8 @@ def analyze_pdf_structure(client: genai.Client, pdf_path, book_title, config):
         config=generation_config,
         max_retries=num_retries,
         max_backoff=max_backoff,
-        operation_name="PDF structure analysis"
+        operation_name="PDF structure analysis",
+        use_streaming=True
     )
     
     logger.debug(f"API response: {response}")
