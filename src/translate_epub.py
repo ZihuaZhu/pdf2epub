@@ -222,7 +222,7 @@ def translate_html_content(
     # Create multipart input with instruction and HTML content
     parts = [
         Part.from_text(prompt),
-        Part.from_text(html_content, mime_type="text/html")
+        Part.from_text(html_content)
     ]
 
     # Get model from config with fallback
