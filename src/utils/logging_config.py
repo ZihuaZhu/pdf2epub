@@ -3,16 +3,20 @@ from pathlib import Path
 from loguru import logger
 
 
-def configure_logging(title=None):
+def configure_logging(title=None, verbose=True):
     """
-    Configure loguru logger to write logs to stderr and to a file in output/title/logs/ folder.
+    Configure loguru logger to write logs to stderr (if verbose) and to a file in output/title/logs/ folder.
     
     Args:
-        title (str, optional): The book title to use for the log folder. If None, logs will only go to stderr.
+        title (str, optional): The book title to use for the log folder. If None, logs will only go to stderr if verbose is True.
+        verbose (bool, optional): Whether to output logs to stderr. Defaults to True.
     
     Returns:
         The configured logger instance
     """
+    # Remove default stderr handler if not verbose
+    if not verbose:
+        logger.remove()
     # If title is provided, add file handler
     if title:
         # Create logs directory

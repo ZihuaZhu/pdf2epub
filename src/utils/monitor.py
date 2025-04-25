@@ -7,8 +7,8 @@ import time
 from src.utils.logging_config import configure_logging
 from loguru import logger
 
-# Configure logger
-logger = configure_logging()
+# Configure logger (will be updated with verbose flag in main)
+logger = None
 
 
 def upload_directory(s3_client, local_folder, bucket_name, s3_folder):
@@ -59,8 +59,13 @@ def main():
     parser.add_argument("bucket_name", help="S3 Bucket Name", default="bookepub")
     parser.add_argument("--final", action="store_true", help="Run upload once and then quit")
     parser.add_argument("--download", action="store_true", help="Download from S3 instead of uploading")
+    parser.add_argument("--verbose", action="store_true", help="Display detailed information during execution")
 
     args = parser.parse_args()
+    
+    # Initialize logger with verbose flag
+    global logger
+    logger = configure_logging(verbose=args.verbose)
     
     session = boto3.session.Session()
     s3_client = session.client(
