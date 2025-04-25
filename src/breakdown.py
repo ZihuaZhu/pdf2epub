@@ -29,7 +29,8 @@ def load_config(config_path="config.yaml"):
 
 def setup_genai_api(api_key):
     """Setup Google Generative AI API with the provided key."""
-    return genai.Client(api_key=api_key)
+    from src.utils.network_utils import setup_genai_client
+    return setup_genai_client(api_key)
 
 
 def preprocess_pdf(input_pdf, output_dir):

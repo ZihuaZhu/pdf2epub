@@ -7,7 +7,28 @@ from google.genai.types import (
     HarmBlockThreshold,
     HarmCategory,
     SafetySetting,
+    HttpOptions,
 )
+
+# Set Gemini API timeout to 60 minutes (in milliseconds)
+GEMINI_TIMEOUT = 60 * 60 * 1000  # 60 minutes
+
+
+def setup_genai_client(api_key):
+    """
+    Setup Google Generative AI API client with the provided key and extended timeout.
+    
+    Args:
+        api_key (str): The API key for Gemini
+        
+    Returns:
+        genai.Client: The configured Gemini client
+    """
+    from google import genai
+    return genai.Client(
+        api_key=api_key,
+        http_options=HttpOptions(timeout=GEMINI_TIMEOUT)
+    )
 
 
 def get_default_generation_config(temperature=0.1):
