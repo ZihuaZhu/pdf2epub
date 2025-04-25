@@ -13,6 +13,7 @@ from google.genai.types import (
     HarmCategory,
     SafetySetting,
 )
+from network_utils import generate_content_with_retry, get_default_generation_config
 import xml.etree.ElementTree as ET
 import argparse
 from loguru import logger
@@ -165,46 +166,27 @@ def translate_html_content(
     
     # Get number of retries from config
     num_retries = config.get("num_retries", 3)
-    retry_count = 0
-    translated_html = None
+    max_backoff = config.get("max_backoff_seconds", 30)
     
-    while translated_html is None and retry_count < num_retries:
-        if retry_count > 0:
-            logger.warning(f"Retry attempt {retry_count} for translating HTML content...")
-            
-        # Generate content
-        response = client.models.generate_content(
-            model=model,
-            contents=prompt,
-            config=GenerateContentConfig(
-                temperature=0.2,
-                safety_settings=[
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                ],
-            ),
-        )
-
-        # Clean and return the translated HTML
-        translated_html = clean_html_response(response.text)
-        retry_count += 1
+    # Get generation config with slightly higher temperature for translation
+    generation_config = get_default_generation_config(temperature=0.2)
+    
+    # Generate content with retry
+    response = generate_content_with_retry(
+        client=client,
+        model=model,
+        contents=prompt,
+        config=generation_config,
+        max_retries=num_retries,
+        max_backoff=max_backoff,
+        operation_name=f"HTML translation for {chapter_title}"
+    )
+    
+    # Clean and return the translated HTML
+    translated_html = clean_html_response(response.text)
     
     if translated_html is None:
-        raise ValueError(f"Failed to translate HTML content after {num_retries} attempts")
+        raise ValueError(f"Failed to translate HTML content for {chapter_title}")
         
     return translated_html
 
@@ -221,12 +203,22 @@ def translate_book_title(book_title, source_language, target_language, client, c
     # Get model from config with fallback
     model = config.get("model", "gemini-2.5-pro-preview-03-25")
     
-    response = client.models.generate_content(
+    # Get number of retries from config
+    num_retries = config.get("num_retries", 3)
+    max_backoff = config.get("max_backoff_seconds", 30)
+    
+    # Get generation config
+    generation_config = get_default_generation_config(temperature=0.1)
+    
+    # Generate content with retry
+    response = generate_content_with_retry(
+        client=client,
         model=model,
         contents=prompt,
-        config=GenerateContentConfig(
-            temperature=0.1,
-        ),
+        config=generation_config,
+        max_retries=num_retries,
+        max_backoff=max_backoff,
+        operation_name="Book title translation"
     )
 
     return response.text.strip()
@@ -251,12 +243,25 @@ def translate_toc_entries(chapters, source_language, target_language, client, co
         {titles_str}
         """
 
-        response = client.models.generate_content(
-            model=config.get("model", "gemini-2.5-pro-preview-03-25"),
+        # Get model from config with fallback
+        model = config.get("model", "gemini-2.5-pro-preview-03-25")
+        
+        # Get number of retries from config
+        num_retries = config.get("num_retries", 3)
+        max_backoff = config.get("max_backoff_seconds", 30)
+        
+        # Get generation config
+        generation_config = get_default_generation_config(temperature=0.1)
+        
+        # Generate content with retry
+        response = generate_content_with_retry(
+            client=client,
+            model=model,
             contents=prompt,
-            config=GenerateContentConfig(
-                temperature=0.1,
-            ),
+            config=generation_config,
+            max_retries=num_retries,
+            max_backoff=max_backoff,
+            operation_name=f"TOC entries translation (batch {i // batch_size + 1})"
         )
 
         translated_titles = response.text.strip().split("\n")

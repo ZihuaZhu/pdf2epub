@@ -7,11 +7,14 @@ import yaml
 import zipfile
 import re
 import argparse
+import time
 from io import BytesIO
 from datetime import datetime
 from pathlib import Path
 from PIL import Image
 from google import genai
+import httpx
+from network_utils import generate_content_with_retry, get_default_generation_config
 from google.genai.types import (
     GenerateContentConfig,
     HarmBlockThreshold,
@@ -423,72 +426,25 @@ def create_toc_html(structure, book_title, output_path, client, pdf_path, config
     # Get model from config with fallback
     model = config.get("model", "gemini-2.5-pro-preview-03-25")
     
-    # Generate content
-    response = client.models.generate_content(
-        model=model,
-        contents=parts,
-        config=GenerateContentConfig(
-            temperature=0.1,
-            safety_settings=[
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-            ],
-        ),
-    )
-    
     # Get number of retries from config
     num_retries = config.get("num_retries", 3)
-    retry_count = 0
-    html_content = None
+    max_backoff = config.get("max_backoff_seconds", 30)
     
-    while html_content is None and retry_count < num_retries:
-        if retry_count > 0:
-            logger.warning(f"Retry attempt {retry_count} for TOC HTML generation...")
-            
-        # Generate content
-        response = client.models.generate_content(
-            model=model,
-            contents=parts,
-            config=GenerateContentConfig(
-                temperature=0.1,
-                safety_settings=[
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                ],
-            ),
-        )
-        
-        # Clean the HTML response
-        html_content = clean_html_response(response.text)
-        retry_count += 1
+    # Get default generation config
+    generation_config = get_default_generation_config(temperature=0.1)
+    
+    response = generate_content_with_retry(
+        client=client,
+        model=model,
+        contents=parts,
+        config=generation_config,
+        max_retries=num_retries,
+        max_backoff=max_backoff,
+        operation_name="TOC HTML generation"
+    )
+    
+    # Clean the HTML response
+    html_content = clean_html_response(response.text)
     
     if html_content is None:
         raise ValueError(f"Failed to generate TOC HTML after {num_retries} attempts")
@@ -677,72 +633,25 @@ def create_chapter_html(
     # Get model from config with fallback
     model = config.get("model", "gemini-2.5-pro-preview-03-25")
     
-    # Generate content
-    response = client.models.generate_content(
-        model=model,
-        contents=parts,
-        config=GenerateContentConfig(
-            temperature=0.1,
-            safety_settings=[
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-                SafetySetting(
-                    category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                    threshold=HarmBlockThreshold.BLOCK_NONE,
-                ),
-            ],
-        ),
-    )
-
     # Get number of retries from config
     num_retries = config.get("num_retries", 3)
-    retry_count = 0
-    html_content = None
+    max_backoff = config.get("max_backoff_seconds", 30)
     
-    while html_content is None and retry_count < num_retries:
-        if retry_count > 0:
-            logger.warning(f"Retry attempt {retry_count} for chapter {chapter_index} HTML generation...")
-            
-        # Generate content
-        response = client.models.generate_content(
-            model=model,
-            contents=parts,
-            config=GenerateContentConfig(
-                temperature=0.1,
-                safety_settings=[
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                    SafetySetting(
-                        category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                        threshold=HarmBlockThreshold.BLOCK_NONE,
-                    ),
-                ],
-            ),
-        )
-        
-        # Clean the HTML response
-        html_content = clean_html_response(response.text)
-        retry_count += 1
+    # Get default generation config
+    generation_config = get_default_generation_config(temperature=0.1)
+    
+    response = generate_content_with_retry(
+        client=client,
+        model=model,
+        contents=parts,
+        config=generation_config,
+        max_retries=num_retries,
+        max_backoff=max_backoff,
+        operation_name=f"Chapter {chapter_index} HTML generation"
+    )
+    
+    # Clean the HTML response
+    html_content = clean_html_response(response.text)
     
     if html_content is None:
         raise ValueError(f"Failed to generate chapter {chapter_index} HTML after {num_retries} attempts")

@@ -10,6 +10,7 @@ from google.genai.types import (
     Part,
     SafetySetting
 )
+from network_utils import generate_content_with_retry, get_default_generation_config
 from pdf_compressor import compress_pdf
 import argparse
 from loguru import logger
@@ -185,49 +186,42 @@ def analyze_pdf_structure(client: genai.Client, pdf_path, book_title, config):
     
     # Get number of retries from config
     num_retries = config.get("num_retries", 3)
-    retry_count = 0
-    response = None
+    max_backoff = config.get("max_backoff_seconds", 30)
     
-    while response is None and retry_count < num_retries:
-        if retry_count > 0:
-            logger.warning(f"Retry attempt {retry_count} for PDF structure analysis...")
-            
-        try:
-            # Generate content with structured response
-            response = client.models.generate_content(
-                model=model,
-                contents=parts,
-                config=GenerateContentConfig(
-                    temperature=0.1,
-                    response_mime_type="application/json",
-                    safety_settings=[
-                        SafetySetting(
-                            category=HarmCategory.HARM_CATEGORY_HARASSMENT,
-                            threshold=HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        SafetySetting(
-                            category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-                            threshold=HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        SafetySetting(
-                            category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-                            threshold=HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                        SafetySetting(
-                            category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-                            threshold=HarmBlockThreshold.BLOCK_NONE,
-                        ),
-                    ],
-                )
-            )
-        except Exception as e:
-            logger.error(f"API call failed: {e}")
-            response = None
-        
-        retry_count += 1
+    # Create generation config
+    generation_config = GenerateContentConfig(
+        temperature=0.1,
+        response_mime_type="application/json",
+        safety_settings=[
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold=HarmBlockThreshold.BLOCK_NONE,
+            ),
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold=HarmBlockThreshold.BLOCK_NONE,
+            ),
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold=HarmBlockThreshold.BLOCK_NONE,
+            ),
+            SafetySetting(
+                category=HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold=HarmBlockThreshold.BLOCK_NONE,
+            ),
+        ],
+    )
     
-    if response is None:
-        raise ValueError(f"Failed to analyze PDF structure after {num_retries} attempts")
+    # Generate content with retry
+    response = generate_content_with_retry(
+        client=client,
+        model=model,
+        contents=parts,
+        config=generation_config,
+        max_retries=num_retries,
+        max_backoff=max_backoff,
+        operation_name="PDF structure analysis"
+    )
     
     logger.debug(f"API response: {response}")
 

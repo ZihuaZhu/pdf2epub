@@ -10,3 +10,4 @@ s3_secret_access_key: example_secret_access_key
 s3_bucket_name: example_bucket_name
 s3_endpoint: https://example.com
 num_retries: 3
+max_backoff_seconds: 30
