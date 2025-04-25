@@ -12,6 +12,7 @@ from google.genai.types import (
     HarmBlockThreshold,
     HarmCategory,
     SafetySetting,
+    Part,
 )
 from utils.network_utils import generate_content_with_retry, get_default_generation_config
 import xml.etree.ElementTree as ET
@@ -190,8 +191,9 @@ def translate_html_content(
     if previous_content and previous_content_limit > 0:
         context = f"Previous chapter content (for context only, do not translate this again):\n{previous_content[:previous_content_limit]}\n\n"
 
+    # Create instruction prompt
     prompt = f"""
-    Translate the following HTML content from {source_language} to {target_language}.
+    Translate the HTML content provided in the multipart input from {source_language} to {target_language}.
     
     Book title: {book_title}
     Chapter title: {chapter_title}
@@ -213,13 +215,15 @@ def translate_html_content(
     8. For names of people, places, or titles that have standard translations in {target_language},
        use those standard translations
     
-    {context}HTML content to translate:
-    
-    {html_content}
-    
-    Return only the translated HTML as raw text, without any JSON formatting, markdown code blocks, or other commentary.
+    {context}Return only the translated HTML as raw text, without any JSON formatting, markdown code blocks, or other commentary.
     The response should start directly with the HTML content.
     """
+
+    # Create multipart input with instruction and HTML content
+    parts = [
+        Part.from_text(prompt),
+        Part.from_text(html_content, mime_type="text/html")
+    ]
 
     # Get model from config with fallback
     model = config.get("model", "gemini-2.5-pro-preview-03-25")
@@ -231,11 +235,11 @@ def translate_html_content(
     # Get generation config with slightly higher temperature for translation
     generation_config = get_default_generation_config(temperature=0.2)
     
-    # Generate content with retry
+    # Generate content with retry using multipart input
     response = generate_content_with_retry(
         client=client,
         model=model,
-        contents=prompt,
+        contents=parts,
         config=generation_config,
         max_retries=num_retries,
         max_backoff=max_backoff,
