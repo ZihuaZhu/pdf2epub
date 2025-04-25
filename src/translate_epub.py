@@ -118,6 +118,7 @@ def translate_html_content(
     source_language,
     target_language,
     client,
+    config,
     previous_content=None,
 ):
     """Translate HTML content using Gemini API."""
@@ -149,9 +150,12 @@ def translate_html_content(
     Return only the translated HTML without any other commentary.
     """
 
+    # Get model from config with fallback
+    model = config.get("model", "gemini-2.5-pro-preview-03-25")
+    
     # Generate content
     response = client.models.generate_content(
-        model="gemini-2.5-pro-preview-03-25",
+        model=model,
         contents=prompt,
         config=GenerateContentConfig(
             temperature=0.2,
@@ -181,7 +185,7 @@ def translate_html_content(
     return translated_html
 
 
-def translate_book_title(book_title, source_language, target_language, client):
+def translate_book_title(book_title, source_language, target_language, client, config):
     """Translate the book title using Gemini API."""
     prompt = f"""
     Translate the following book title from {source_language} to {target_language}.
@@ -190,8 +194,11 @@ def translate_book_title(book_title, source_language, target_language, client):
     Book title: {book_title}
     """
 
+    # Get model from config with fallback
+    model = config.get("model", "gemini-2.5-pro-preview-03-25")
+    
     response = client.models.generate_content(
-        model="gemini-2.5-pro-preview-03-25",
+        model=model,
         contents=prompt,
         config=GenerateContentConfig(
             temperature=0.1,
@@ -201,7 +208,7 @@ def translate_book_title(book_title, source_language, target_language, client):
     return response.text.strip()
 
 
-def translate_toc_entries(chapters, source_language, target_language, client):
+def translate_toc_entries(chapters, source_language, target_language, client, config):
     """Translate the table of contents entries."""
     translated_chapters = []
 
@@ -221,7 +228,7 @@ def translate_toc_entries(chapters, source_language, target_language, client):
         """
 
         response = client.models.generate_content(
-            model="gemini-2.5-pro-preview-03-25",
+            model=config.get("model", "gemini-2.5-pro-preview-03-25"),
             contents=prompt,
             config=GenerateContentConfig(
                 temperature=0.1,
@@ -386,7 +393,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
     # Translate the book title if not already done
     if not progress["book_title_translated"]:
         translated_book_title = translate_book_title(
-            original_book_title, source_language, target_language, client
+            original_book_title, source_language, target_language, client, config
         )
         print(f"Original title: {original_book_title}")
         print(f"Translated title: {translated_book_title}")
@@ -400,7 +407,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
     # Translate chapter titles if not already done
     if not progress["toc_translated"]:
         translated_chapters = translate_toc_entries(
-            chapters, source_language, target_language, client
+            chapters, source_language, target_language, client, config
         )
         progress["translated_chapters"] = [
             {
@@ -518,6 +525,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
                 source_language,
                 target_language,
                 client,
+                config,
                 previous_content,
             )
 
@@ -567,6 +575,7 @@ def translate_epub(input_epub_path, source_language, target_language, config):
                 source_language,
                 target_language,
                 client,
+                config,
                 previous_content,
             )
 

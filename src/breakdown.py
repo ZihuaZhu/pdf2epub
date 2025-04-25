@@ -113,7 +113,7 @@ def preprocess_pdf(input_pdf, output_dir):
     return processed_pdf
 
 
-def analyze_pdf_structure(client: genai.Client, pdf_path, book_title):
+def analyze_pdf_structure(client: genai.Client, pdf_path, book_title, config):
     """Use Gemini model to analyze the PDF structure from the full PDF."""
     prompt = f"""
     Analyze this book PDF with title "{book_title}" and provide a detailed breakdown of its structure.
@@ -175,9 +175,12 @@ def analyze_pdf_structure(client: genai.Client, pdf_path, book_title):
         Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
     ]
 
+    # Get model from config with fallback
+    model = config.get("model", "gemini-2.5-pro-preview-03-25")
+    
     # Generate content with structured response
     response = client.models.generate_content(
-        model="gemini-2.5-pro-exp-03-25",
+        model=model,
         contents=parts,
         config=GenerateContentConfig(
             temperature=0.1,
@@ -240,7 +243,7 @@ def main():
     # Analyze PDF structure using Gemini
     print(f"Analyzing PDF structure for '{book_title}'...")
     try:
-        structure = analyze_pdf_structure(client, processed_pdf, book_title)
+        structure = analyze_pdf_structure(client, processed_pdf, book_title, config)
 
         # Save the structured output to the output directory
         output_file = output_dir / "book_structure.json"

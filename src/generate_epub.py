@@ -325,7 +325,7 @@ def create_cover_html(cover_image_filename, book_title, output_path):
     print(f"Created cover XHTML at {output_path}")
 
 
-def create_toc_html(structure, book_title, output_path, client, pdf_path):
+def create_toc_html(structure, book_title, output_path, client, pdf_path, config):
     """Create HTML file for the table of contents using Gemini."""
     # Get TOC page range from the structure
     toc_start = structure["table_of_contents"]["start_page"]
@@ -370,9 +370,12 @@ def create_toc_html(structure, book_title, output_path, client, pdf_path):
         Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
     ]
     
+    # Get model from config with fallback
+    model = config.get("model", "gemini-2.5-pro-preview-03-25")
+    
     # Generate content
     response = client.models.generate_content(
-        model="gemini-2.5-pro-exp-03-25",
+        model=model,
         contents=parts,
         config=GenerateContentConfig(
             temperature=0.1,
@@ -421,6 +424,7 @@ def create_chapter_html(
     pdf_path,
     images_dir,
     previous_chapters,
+    config,
 ):
     """Create HTML file for a chapter using Gemini with simplified image handling."""
     # Get chapter page range with buffer (3 pages before and after)
@@ -578,9 +582,12 @@ def create_chapter_html(
         Part.from_bytes(data=pdf_data, mime_type="application/pdf"),
     ]
 
+    # Get model from config with fallback
+    model = config.get("model", "gemini-2.5-pro-preview-03-25")
+    
     # Generate content
     response = client.models.generate_content(
-        model="gemini-2.5-pro-exp-03-25",
+        model=model,
         contents=parts,
         config=GenerateContentConfig(
             temperature=0.1,
@@ -936,7 +943,7 @@ def main():
 
     # Create HTML for the table of contents
     toc_html_path = text_dir / "toc.html"
-    create_toc_html(structure, book_title, toc_html_path, client, pdf_path)
+    create_toc_html(structure, book_title, toc_html_path, client, pdf_path, config)
 
     # Process each chapter
     previous_chapters = []
@@ -954,6 +961,7 @@ def main():
             pdf_path,
             images_dir,
             previous_chapters,
+            config,
         )
         chapter_titles.append(chapter_title)
 
