@@ -1,6 +1,6 @@
-title: 书籍原始标题
-target_title: 书籍翻译后的标题
-author: 作者名
+title: 感傷マゾvol2
+target_title: 感傷マゾ
+author: 感傷マゾ
 google_api_key: AIzaSyBvtQ1B0GN0ckQILx-1L-qdG-m_73owtdM
 model: gemini-2.5-pro-preview-03-25
 target_language: 中文
