@@ -8,7 +8,7 @@ source_language: 英文
 s3_access_key_id: 00609f70e6bf72c0000000001
 s3_secret_access_key: K006h0v8NVUKoNW4z+fFH1kFGNoo3ig
 s3_bucket_name: translator233
-s3_endpoint: http://s3.ca-east-006.backblazeb2.com/
+s3_endpoint: https://s3.ca-east-006.backblazeb2.com
 num_retries: 3  
 max_backoff_seconds: 30  
 previous_content_limit: 0  
