@@ -2,7 +2,7 @@ title: 感傷マゾvol2
 target_title: 感伤受虐2
 author: A
 google_api_key: AIzaSyBvtQ1B0GN0ckQILx-1L-qdG-m_73owtdM
-model: gemini-2.5-flash-preview-04-17
+model: gemini-2.5-pro-preview-03-25
 target_language: 中文
 source_language: 英文
 s3_access_key_id: 00609f70e6bf72c0000000002
